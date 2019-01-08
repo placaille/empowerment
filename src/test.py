@@ -12,7 +12,7 @@ import custom_envs
     'RoomPlus2Corrid-v0',
 ]))
 def main(**kwargs):
-    env_name = kwargs.get('env')
+    env_name = kwargs.get('env_name')
     env = gym.make(env_name)
     env.reset()
 
