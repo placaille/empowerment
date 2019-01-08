@@ -57,7 +57,7 @@ class DiscreteStaticEnv(StaticEnv):
         else:
             self.state = self.observation_space.sample()
         self.pos = self.state_to_pos[self.state]
-        return self.state
+        return self._convert_to_onehot(self.state)
 
     def step(self, action):
         assert self.action_space.contains(action), 'ValueError: {}'.format(action)
@@ -67,11 +67,15 @@ class DiscreteStaticEnv(StaticEnv):
         if self.grid[new_pos] == self.free:
             self.pos = np.array(new_pos)
             self.state = self.pos_to_state[new_pos]
-        return self.state
+        return self._convert_to_onehot(self.state)
 
     def __str__(self):
         return self.map
 
+    def _convert_to_onehot(self, state):
+        onehot = np.zeros(self.observation_space.n)
+        onehot[state] = 1.0
+        return onehot
 
 class TwoRoomVarInfo(DiscreteStaticEnv):
     def __init__(self):
