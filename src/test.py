@@ -43,8 +43,8 @@ def main(**kwargs):
     print('Initializing misc..')
     obs = env.reset()
     action_seq = deque(maxlen=num_steps)
-    cumul_decoder_loss = 0
-    cumul_energy_loss = 0
+    cumul_loss_decoder = 0
+    cumul_loss_source = 0
 
     print('Starting training..')
     for iter in count(start=1):
@@ -55,18 +55,18 @@ def main(**kwargs):
             obs = env.step(action)
 
         loss_decoder = agent.decoder_train_step(prev_obs, obs, action_seq)
-        loss_energy = agent.energy_train_step(prev_obs, obs, action_seq)
+        loss_source = agent.source_train_step(prev_obs, obs, action_seq)
 
-        cumul_decoder_loss += loss_decoder
-        cumul_energy_loss += loss_energy
+        cumul_loss_decoder += loss_decoder
+        cumul_loss_source += loss_source
 
         if iter % 1000 == 0:
-            print('loss decoder/energy: {:6.4f}/{:6.4f}'.format(
-                cumul_decoder_loss / 1000,
-                cumul_energy_loss / 1000
+            print('loss decoder/source {:6.4f}/{:6.4f}'.format(
+                cumul_loss_decoder / 1000,
+                cumul_loss_source / 1000
             ))
-            cumul_decoder_loss = 0
-            cumul_energy_loss = 0
+            cumul_loss_decoder = 0
+            cumul_loss_source = 0
 
         if iter == 100000:
             break
