@@ -52,7 +52,7 @@ class DiscreteStaticAgent(object):
 
         logits_seq = self.decoder(obs_stack.unsqueeze(0).to(self.device))
         log_softmax_seq = F.log_softmax(logits_seq, dim=1).detach()
-        target_energy = log_softmax_seq[:, self.actions_seqs[seq]]
+        target_energy = self.beta * log_softmax_seq[:, self.actions_seqs[seq]]
 
         onehot_seq = self._convert_seq_to_onehot(self.actions_seqs[seq])
         seq_obs_stack = torch.cat([torch.FloatTensor(obs_start), torch.FloatTensor(onehot_seq)])
