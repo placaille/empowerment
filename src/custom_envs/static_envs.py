@@ -50,9 +50,11 @@ class DiscreteStaticEnv(StaticEnv):
                     self.state_to_pos[state_id] = np.array([i, j])
                     state_id += 1
 
+        self.free_pos = [tuple(self.state_to_pos[id]) for id in self.free_states]
+
     def reset(self, state_id=None):
         if state_id:
-            assert self.observation_space.contains(state_id), 'ValueError: {}'.format(state_id)
+            assert self.free_states.contains(state_id), 'ValueError: {}'.format(state_id)
             self.state = state_id
         else:
             self.state = self.observation_space.sample()

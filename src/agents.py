@@ -1,5 +1,8 @@
 import torch
 
+import numpy as np
+import seaborn as sns
+
 from torch import nn, optim
 from itertools import product
 
@@ -11,10 +14,11 @@ import models
 
 class DiscreteStaticAgent(object):
     def __init__(self, actions, observation_size, hidden_size, emp_num_steps,
-                 beta, device='cpu'):
+                 beta, max_batch_size=32, device='cpu'):
         assert type(actions) is dict
         self.device = device
         self.beta = beta
+        self.max_batch_size = max_batch_size
 
         self.actions = actions
         actions_id = [str(x) for x in self.actions.values()]
@@ -84,7 +88,21 @@ class DiscreteStaticAgent(object):
         self.optim_decoder.step()
         return loss_decoder.item()
 
-    def compute_empowerment(self, obs):
+    def compute_empowerment(self, state):
         with torch.no_grad():
-            phi = self.model_phi(torch.FloatTensor(obs).to(self.device))
+            phi = self.model_phi(torch.FloatTensor(state).to(self.device))
         return 1 / self.beta * phi
+
+    def compute_empowerment_map(self, env):
+        all_states = np.eye(env.observation_space.n)
+
+        empowerment = []
+        empowerment_map = np.zeros(env.grid.shape).astype(np.float32)
+        for start_id in range(0, env.observation_space.n, self.max_batch_size):
+            states = torch.FloatTensor(all_states[start_id:start_id+self.max_batch_size])
+            empowerment.append(self.compute_empowerment(states.to(self.device)))
+        empowerment = np.concatenate(empowerment).squeeze()
+
+        states_i, states_j = zip(*env.free_pos)
+        empowerment_map[states_i, states_j] = empowerment
+        return empowerment_map
