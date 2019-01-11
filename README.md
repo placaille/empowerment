@@ -5,7 +5,10 @@ This serves as a repo for reproducing the paper entitled [Variational Informatio
 # TODO
 * [x] Make basic environments that will allow for testing
 * [ ] Implement basic empowerment estimation from paper
-    * [ ] Decoder to predict which sequence of actions was taken (log-likelihood)
+    * [X] Decoder to predict which sequence of actions was taken (log-likelihood)
+    * [X] Source network
+    * [ ] Verify the empowerment computed is correct for at least one single state
+* [ ] Set up makefile for easy launch and clean of runs
 * [ ] Implement true empowerment algorithm [see this section](#blahut-arimoto-algorithm)
 
 # Objective

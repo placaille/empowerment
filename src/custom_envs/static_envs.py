@@ -52,13 +52,18 @@ class DiscreteStaticEnv(StaticEnv):
 
         self.free_pos = [tuple(self.state_to_pos[id]) for id in self.free_states]
 
-    def reset(self, state_id=None):
-        if state_id:
-            assert self.free_states.contains(state_id), 'ValueError: {}'.format(state_id)
-            self.state = state_id
+    def reset(self, state=None, pos=None):
+        if state is not None:
+            assert state in self.free_states
+            self.state = state
+            self.pos = self.state_to_pos[self.state]
+        elif pos is not None:
+            self.state = self.pos_to_state[pos]
+            assert self.state in self.free_states
+            self.pos = self.state_to_pos[self.state]
         else:
             self.state = self.observation_space.sample()
-        self.pos = self.state_to_pos[self.state]
+            self.pos = self.state_to_pos[self.state]
         return self._convert_state_to_onehot(self.state)
 
     def step(self, action):

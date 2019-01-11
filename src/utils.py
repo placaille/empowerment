@@ -8,7 +8,7 @@ def log_empowerment_map(map, env, writer, tag, global_step):
     mask = env.grid != env.free
     # import pdb;pdb.set_trace()
     with sns.axes_style("white"):
-        ax = sns.heatmap(map, mask=mask, xticklabels=False, yticklabels=False)
+        ax = sns.heatmap(map, mask=mask, cmap='viridis', xticklabels=False, yticklabels=False)
     plt.savefig('test.jpg')
 
     # log to tensorboardX

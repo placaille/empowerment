@@ -95,14 +95,15 @@ class DiscreteStaticAgent(object):
 
     def compute_empowerment_map(self, env):
         all_states = np.eye(env.observation_space.n)
+        states_i, states_j = zip(*env.free_pos)
 
         empowerment = []
-        empowerment_map = np.zeros(env.grid.shape).astype(np.float32)
         for start_id in range(0, env.observation_space.n, self.max_batch_size):
             states = torch.FloatTensor(all_states[start_id:start_id+self.max_batch_size])
             empowerment.append(self.compute_empowerment(states.to(self.device)))
         empowerment = np.concatenate(empowerment).squeeze()
 
-        states_i, states_j = zip(*env.free_pos)
+        # init map value to avg empowerment to simplify color mapping later
+        empowerment_map = np.full(env.grid.shape, empowerment.mean(), dtype=np.float32)
         empowerment_map[states_i, states_j] = empowerment
         return empowerment_map

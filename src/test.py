@@ -21,14 +21,16 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     'RoomPlus2Corrid-v0',
 ]))
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
-@click.option('--hidden-size', type=int, default=32, help='Num steps for empowerment')
-@click.option('--batch-per-eval', type=int, default=100)
+@click.option('--hidden-size', type=int, default=32)
+@click.option('--batch-per-eval', type=int, default=10000)
+@click.option('--source-beta', type=float, default=1.0)
 def main(**kwargs):
     print(kwargs)
     env_name = kwargs.get('env_name')
     num_steps = kwargs.get('num_steps')
     hidden_size = kwargs.get('hidden_size')
     batch_per_eval = kwargs.get('batch_per_eval')
+    source_beta = kwargs.get('source_beta')
 
     print('Initializing env..')
     env = gym.make(env_name)
@@ -45,7 +47,6 @@ def main(**kwargs):
 
     print('Initializing misc..')
     writer = SummaryWriter()
-    obs = env.reset()
     action_seq = deque(maxlen=num_steps)
     cumul_loss_decoder = 0
     cumul_loss_source = 0
@@ -53,6 +54,7 @@ def main(**kwargs):
 
     print('Starting training..')
     for iter in count(start=1):
+        obs = env.reset()
         prev_obs = obs
         for _ in range(num_steps):
             action = env.action_space.sample()
@@ -74,10 +76,9 @@ def main(**kwargs):
             utils.log_loss(avg_loss_decoder, writer, 'loss/decoder', iter)
             utils.log_loss(avg_loss_source, writer, 'loss/source', iter)
 
-            print('iter {:8d} - loss tot {:6.4f} - {:6.4f}/{:6.4f}/{:6.4f} - {:4.1f}'.format(
+            print('iter {:8d} - loss tot {:6.4f} - {:4.1f}s'.format(
                 iter,
                 avg_loss_decoder + avg_loss_source,
-                empowerment_map.min(), empowerment_map.max(), empowerment_map.mean(),
                 timer() - start,
             ))
             cumul_loss_decoder = 0
