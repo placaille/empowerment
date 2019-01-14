@@ -22,14 +22,16 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ]))
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--hidden-size', type=int, default=32)
-@click.option('--batch-per-eval', type=int, default=10000)
+@click.option('--iter-per-eval', type=int, default=10000)
+@click.option('--max-iter', type=int, default=1000000)
 @click.option('--source-beta', type=float, default=1.0)
 def main(**kwargs):
     print(kwargs)
     env_name = kwargs.get('env_name')
     num_steps = kwargs.get('num_steps')
     hidden_size = kwargs.get('hidden_size')
-    batch_per_eval = kwargs.get('batch_per_eval')
+    iter_per_eval = kwargs.get('iter_per_eval')
+    max_iter = kwargs.get('max_iter')
     source_beta = kwargs.get('source_beta')
 
     print('Initializing env..')
@@ -67,12 +69,12 @@ def main(**kwargs):
         cumul_loss_decoder += loss_decoder
         cumul_loss_source += loss_source
 
-        if iter % batch_per_eval == 0:
-            avg_loss_decoder = cumul_loss_decoder / batch_per_eval
-            avg_loss_source = cumul_loss_source / batch_per_eval
+        if iter % iter_per_eval == 0:
+            avg_loss_decoder = cumul_loss_decoder / iter_per_eval
+            avg_loss_source = cumul_loss_source / iter_per_eval
             empowerment_map = agent.compute_empowerment_map(env)
 
-            utils.log_empowerment_map(empowerment_map, env, writer, 'empowerment', iter)
+            utils.log_empowerment_map(empowerment_map, env, writer, 'empowerment_' + env_name, iter)
             utils.log_loss(avg_loss_decoder, writer, 'loss/decoder', iter)
             utils.log_loss(avg_loss_source, writer, 'loss/source', iter)
 
@@ -85,7 +87,7 @@ def main(**kwargs):
             cumul_loss_source = 0
             start = timer()
 
-        if iter == 100000:
+        if iter >= max_iter:
             break
 
 
