@@ -65,10 +65,10 @@ def get_d(p, seq_dict, rollouts, seqs_leading_to_state):
     'CrossRoom-v0',
     'RoomPlus2Corrid-v0',
 ]))
-@click.argument('output-file', type=click.Path(exists=False, dir_okay=False, writable=True))
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--epsilon', type=float, default=1e-4, help='Margin to stop EM-algorithm')
-def main(env_name, output_file, num_steps, epsilon):
+@click.option('--out-dir', type=click.Path(exists=True, file_okay=False, writable=True), default='./')
+def main(env_name, num_steps, epsilon, out_dir):
     """
     Used to compute empowerment for discrete, deterministic environment (grid-world)
     """
@@ -88,7 +88,19 @@ def main(env_name, output_file, num_steps, epsilon):
         p_a = np.ones(len(actions_seqs)) / len(actions_seqs)  # start with uniform probs
         p_a, emp = em_loop(p_a, actions_seqs, rollouts, epsilon)
         empowerment.append(emp)
+    empowerment = np.array(empowerment)
 
+    # convert to a map of empowerment
+    all_states = np.eye(env.observation_space.n)
+    states_i, states_j = zip(*env.free_pos)
+
+    # init map value to avg empowerment to simplify color mapping later
+    empowerment_map = np.full(env.grid.shape, empowerment.mean(), dtype=np.float32)
+    empowerment_map[states_i, states_j] = empowerment
+
+    utils.log_empowerment_map(empowerment_map, env, writer,
+                              tag='true_empowerment_{}_{}_step'.format(env_name, num_steps),
+                              save_dir=out_dir)
 
 if __name__ == '__main__':
     main()

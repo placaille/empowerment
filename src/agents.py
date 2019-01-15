@@ -5,6 +5,7 @@ import seaborn as sns
 
 from torch import nn, optim
 from itertools import product
+from torch.distributions import Categorical
 
 import torch.nn.functional as F
 
@@ -22,11 +23,11 @@ class DiscreteStaticAgent(object):
 
         self.actions = actions
         actions_id = [str(x) for x in self.actions.values()]
-        actions_keys = [''.join(act_seq) for act_seq in product(actions_id, repeat=emp_num_steps)]
+        self.actions_keys = [''.join(act_seq) for act_seq in product(actions_id, repeat=emp_num_steps)]
 
         self.actions_seqs = {}
-        for actions_key in actions_keys:
-            self.actions_seqs[actions_key] = actions_keys.index(actions_key)
+        for actions_key in self.actions_keys:
+            self.actions_seqs[actions_key] = self.actions_keys.index(actions_key)
 
         # model used to compute likelihood of action sequences
         self.decoder = models.MLP(2*observation_size, hidden_size, len(self.actions_seqs))
@@ -107,3 +108,10 @@ class DiscreteStaticAgent(object):
         empowerment_map = np.full(env.grid.shape, empowerment.mean(), dtype=np.float32)
         empowerment_map[states_i, states_j] = empowerment
         return empowerment_map
+
+    def sample_sequence(self, obs):
+        obs = torch.FloatTensor(obs).unsqueeze(0)
+        with torch.no_grad():
+            seq_logits = self.model_source_distr(obs.to(self.device))
+            seq_distr = Categorical(logits=seq_logits)
+        return seq_distr.sample().item()

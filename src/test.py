@@ -25,6 +25,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 @click.option('--iter-per-eval', type=int, default=10000)
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--source-beta', type=float, default=1.0)
+@click.option('--out-dir', type=click.Path(exists=True, file_okay=False, writable=True), default='./')
 def main(**kwargs):
     print(kwargs)
     env_name = kwargs.get('env_name')
@@ -33,6 +34,7 @@ def main(**kwargs):
     iter_per_eval = kwargs.get('iter_per_eval')
     max_iter = kwargs.get('max_iter')
     source_beta = kwargs.get('source_beta')
+    out_dir = kwargs.get('out_dir')
 
     print('Initializing env..')
     env = gym.make(env_name)
@@ -55,11 +57,12 @@ def main(**kwargs):
     start = timer()
 
     print('Starting training..')
+    obs = env.reset()
     for iter in count(start=1):
-        obs = env.reset()
         prev_obs = obs
-        for _ in range(num_steps):
-            action = env.action_space.sample()
+        seq = agent.sample_sequence(obs)
+        actions = [int(x) for x in agent.actions_keys[seq]]
+        for action in actions:
             action_seq.append(action)
             obs = env.step(action)
 
@@ -74,7 +77,10 @@ def main(**kwargs):
             avg_loss_source = cumul_loss_source / iter_per_eval
             empowerment_map = agent.compute_empowerment_map(env)
 
-            utils.log_empowerment_map(empowerment_map, env, writer, 'empowerment_' + env_name, iter)
+            utils.log_empowerment_map(empowerment_map, env, writer,
+                                      tag='var-info_empowerment_{}_{}'.format(env_name, num_steps),
+                                      global_step=iter,
+                                      save_dir=out_dir)
             utils.log_loss(avg_loss_decoder, writer, 'loss/decoder', iter)
             utils.log_loss(avg_loss_source, writer, 'loss/source', iter)
 
