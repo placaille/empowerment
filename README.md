@@ -8,8 +8,8 @@ This serves as a repo for reproducing the paper entitled [Variational Informatio
     * [X] Decoder to predict which sequence of actions was taken (log-likelihood)
     * [X] Source network
     * [X] Verify the empowerment computed is correct for at least one single state
-* [ ] Implement true empowerment algorithm (Blahut-Arimoto)
-    * [ ] Expand the documentation in the repo [see this section](#blahut-arimoto-algorithm)
+* [X] Implement true empowerment algorithm (Blahut-Arimoto)
+* [ ] Expand the documentation in the repo [see this section](#blahut-arimoto-algorithm)
 * [ ] Set up makefile for easy launch and clean of runs
 * [ ] Run the maps with longer sequences
 

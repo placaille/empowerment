@@ -109,7 +109,7 @@ class DiscreteStaticAgent(object):
         empowerment_map[states_i, states_j] = empowerment
         return empowerment_map
 
-    def sample_sequence(self, obs):
+    def sample_source_sequence(self, obs):
         obs = torch.FloatTensor(obs).unsqueeze(0)
         with torch.no_grad():
             seq_logits = self.model_source_distr(obs.to(self.device))

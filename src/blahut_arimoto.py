@@ -67,8 +67,8 @@ def get_d(p, seq_dict, rollouts, seqs_leading_to_state):
 ]))
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--epsilon', type=float, default=1e-4, help='Margin to stop EM-algorithm')
-@click.option('--out-dir', type=click.Path(exists=True, file_okay=False, writable=True), default='./')
-def main(env_name, num_steps, epsilon, out_dir):
+@click.option('--out-file', type=click.Path(dir_okay=False, writable=True), default=None)
+def main(env_name, num_steps, epsilon, out_file):
     """
     Used to compute empowerment for discrete, deterministic environment (grid-world)
     """
@@ -98,9 +98,10 @@ def main(env_name, num_steps, epsilon, out_dir):
     empowerment_map = np.full(env.grid.shape, empowerment.mean(), dtype=np.float32)
     empowerment_map[states_i, states_j] = empowerment
 
-    utils.log_empowerment_map(empowerment_map, env, writer,
-                              tag='true_empowerment_{}_{}_step'.format(env_name, num_steps),
-                              save_dir=out_dir)
+    utils.log_empowerment_map(writer, empowerment_map,
+                              mask=env.grid != env.free,
+                              tag='true_empowerment_{}_steps/{}'.format(num_steps, env_name),
+                              file_name=out_file)
 
 if __name__ == '__main__':
     main()
