@@ -3,7 +3,7 @@ channels:
   - defaults
   - pytorch
 dependencies:
-  - python=3.7
+  - python=3.6
   - numpy
   - pytorch=1.0.0
   - pyzmq
