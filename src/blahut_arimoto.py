@@ -40,8 +40,8 @@ def em_loop(p, seq_dict, rollouts, epsilon):
         z = np.sum(p * np.exp(d))
         p *= 1 / z * np.exp(d)
         old_emp = emp
-        emp = np.sum(p * d)
         d = get_d(p, seq_dict, rollouts, seqs_leading_to_state)
+        emp = np.sum(p * d)
     return p, emp
 
 
