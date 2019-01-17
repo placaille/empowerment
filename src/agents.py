@@ -11,11 +11,12 @@ import torch.nn.functional as F
 
 # custom code
 import models
+import utils
 
 
 class DiscreteStaticAgent(object):
     def __init__(self, actions, observation_size, hidden_size, emp_num_steps,
-                 beta, max_batch_size=32, device='cpu'):
+                 beta, mem_size, mem_fields, max_batch_size=32, device='cpu'):
         assert type(actions) is dict
         self.device = device
         self.beta = beta
@@ -49,24 +50,30 @@ class DiscreteStaticAgent(object):
             list(self.model_phi.parameters())
         )
 
+        self.memory = utils.Memory(mem_size, *mem_fields)
+
     def _convert_act_list_to_str(self, actions):
         return ''.join([str(x) for x in actions])
 
-    def source_train_step(self, obs_start, obs_end, actions):
-        obs_start = torch.FloatTensor(obs_start)
-        obs_stack = torch.cat([obs_start, torch.FloatTensor(obs_end)])
-        seq = self._convert_act_list_to_str(actions)
+    def source_train_step(self):
+        batch = self.memory.sample_data(self.max_batch_size)
 
-        logits_seq = self.decoder(obs_stack.unsqueeze(0).to(self.device))
+        obs_start = torch.FloatTensor(batch.obs_start)
+        obs_stack = torch.cat([obs_start, torch.FloatTensor(batch.obs_end)], dim=1)
+
+        seq_id = [self.actions_seqs[self._convert_act_list_to_str(seq)] for seq in batch.act_seq]
+        seq_id = torch.LongTensor(seq_id).to(self.device)
+
+        logits_seq = self.decoder(obs_stack.to(self.device))
         log_softmax_seq = F.log_softmax(logits_seq, dim=1).detach()
-        target_energy = self.beta * log_softmax_seq[:, self.actions_seqs[seq]]
+        target_energy = self.beta * log_softmax_seq.gather(1, seq_id.unsqueeze(1))
 
-        logits_source_distr = self.model_source_distr(obs_start.unsqueeze(0).to(self.device))
-        log_softmax_source_distr = F.log_softmax(logits_source_distr, dim=1)
-        log_likelihood_source = log_softmax_source_distr[:, self.actions_seqs[seq]]
+        logits_src_distr = self.model_source_distr(obs_start.to(self.device))
+        log_softmax_src_distr = F.log_softmax(logits_src_distr, dim=1)
+        log_likelihood_src = log_softmax_src_distr.gather(1, seq_id.unsqueeze(1))
 
         phi = self.model_phi(obs_start.to(self.device))
-        preds_energy = log_likelihood_source + phi
+        preds_energy = log_likelihood_src + phi
 
         loss_source = self.obj_source(preds_energy, target_energy)
 
@@ -75,12 +82,15 @@ class DiscreteStaticAgent(object):
         self.optim_source.step()
         return loss_source.item()
 
-    def decoder_train_step(self, obs_start, obs_end, actions):
-        obs_stack = torch.cat([torch.FloatTensor(obs_start), torch.FloatTensor(obs_end)])
-        seq = self._convert_act_list_to_str(actions)
+    def decoder_train_step(self):
+        batch = self.memory.sample_data(self.max_batch_size)
 
-        labels_seq = torch.LongTensor([self.actions_seqs[seq]]).to(self.device)
-        logits_seq = self.decoder(obs_stack.unsqueeze(0).to(self.device))
+        obs_stack = torch.cat([torch.FloatTensor(batch.obs_start),
+                               torch.FloatTensor(batch.obs_end)], dim=1)
+        seq_id = [self.actions_seqs[self._convert_act_list_to_str(seq)] for seq in batch.act_seq]
+
+        labels_seq = torch.LongTensor(seq_id).to(self.device)
+        logits_seq = self.decoder(obs_stack.to(self.device))
 
         loss_decoder = self.obj_decoder(logits_seq, labels_seq)
 
