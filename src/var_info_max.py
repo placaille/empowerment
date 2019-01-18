@@ -26,7 +26,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--source-beta', type=float, default=1.0)
 @click.option('--out-file', '-o', type=click.Path(dir_okay=False, writable=True), default=None)
-@click.option('--memory-size', type=int, default=10000)
+@click.option('--memory-size', type=int, default=100000)
+@click.option('--samples-per-train', type=int, default=100)
 def main(**kwargs):
     print(kwargs)
     env_name = kwargs.get('env_name')
@@ -37,6 +38,7 @@ def main(**kwargs):
     source_beta = kwargs.get('source_beta')
     out_file = kwargs.get('out_file')
     memory_size = kwargs.get('memory_size')
+    samples_per_train = kwargs.get('samples_per_train')
 
     print('Initializing env..')
     env = gym.make(env_name)
@@ -50,6 +52,7 @@ def main(**kwargs):
         beta=1.0,
         mem_size=memory_size,
         mem_fields=['obs_start', 'obs_end', 'act_seq'],
+        max_batch_size=128,
         device=device,
     )
 
@@ -62,14 +65,15 @@ def main(**kwargs):
 
     print('Starting training..')
     for iter in count(start=1):
-        obs = env.reset()
-        prev_obs = obs
-        for _ in range(num_steps):
-            action = env.action_space.sample()
-            action_seq.append(action)
-            obs = env.step(action)
+        for _ in range(samples_per_train):
+            obs = env.reset()
+            prev_obs = obs
+            for _ in range(num_steps):
+                action = env.action_space.sample()
+                action_seq.append(action)
+                obs = env.step(action)
 
-        agent.memory.add_data(obs_start=prev_obs, obs_end=obs, act_seq=list(action_seq))
+            agent.memory.add_data(obs_start=prev_obs, obs_end=obs, act_seq=list(action_seq))
         loss_decoder = agent.decoder_train_step()
         loss_source = agent.source_train_step()
 
@@ -86,8 +90,9 @@ def main(**kwargs):
                                       tag='empowerment_{}_steps/{}'.format(num_steps, env_name),
                                       global_step=iter,
                                       file_name=out_file)
-            utils.log_loss(avg_loss_decoder, writer, 'loss/decoder', iter)
-            utils.log_loss(avg_loss_source, writer, 'loss/source', iter)
+            writer.add_scalar('loss/decoder', avg_loss_decoder, iter)
+            writer.add_scalar('loss/source', avg_loss_source, iter)
+            writer.add_scalar('empowerment/avg', (empowerment_map * env.grid).mean(), iter)
 
             print('iter {:8d} - loss tot {:6.4f} - {:4.1f}s'.format(
                 iter,

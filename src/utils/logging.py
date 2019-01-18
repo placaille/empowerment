@@ -16,8 +16,3 @@ def log_empowerment_map(writer, map, mask, tag, global_step=0, file_name=None):
 
     # log to tensorboardX
     writer.add_figure(tag, fig, global_step)
-
-def log_loss(loss, writer, tag, global_step):
-
-    # log to tensorboardX
-    writer.add_scalar(tag, loss, global_step)

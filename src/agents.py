@@ -16,7 +16,7 @@ import utils
 
 class DiscreteStaticAgent(object):
     def __init__(self, actions, observation_size, hidden_size, emp_num_steps,
-                 beta, mem_size, mem_fields, max_batch_size=32, device='cpu'):
+                 beta, mem_size, mem_fields, max_batch_size, device='cpu'):
         assert type(actions) is dict
         self.device = device
         self.beta = beta
@@ -101,8 +101,8 @@ class DiscreteStaticAgent(object):
 
     def compute_empowerment(self, state):
         with torch.no_grad():
-            phi = self.model_phi(torch.FloatTensor(state).to(self.device))
-        return 1 / self.beta * phi
+            phi = self.model_phi(state)
+        return 1 / self.beta * phi.cpu().numpy()
 
     def compute_empowerment_map(self, env):
         all_states = np.eye(env.observation_space.n)
