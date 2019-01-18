@@ -25,13 +25,15 @@ class DiscreteStaticEnv(StaticEnv):
             'UP': 0,
             'DOWN': 1,
             'RIGHT': 2,
-            'LEFT': 3
+            'LEFT': 3,
+            'STAY': 4,
         }
         self.directions = np.array([
             [-1, 0],  # 0-UP
             [1, 0],  # 1-DOWN
             [0, 1],  # 2-RIGHT
             [0, -1],  # 3-LEFT
+            [0, 0],  # 4-STAY
         ])
 
         # define appropriate action and observation spaces
