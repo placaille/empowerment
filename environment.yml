@@ -13,3 +13,6 @@ dependencies:
     - pyyaml
     - click
     - ipython
+    - tensorboardX
+    - tensorflow
+    - seaborn
