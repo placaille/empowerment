@@ -10,7 +10,7 @@ This serves as a repo for reproducing the paper entitled [Variational Informatio
     * [X] Verify the empowerment computed is correct for at least one single state
 * [X] Implement true empowerment algorithm (Blahut-Arimoto)
 * [ ] Expand the documentation in the repo [see this section](#blahut-arimoto-algorithm)
-* [ ] Run the maps with longer sequences
+* [X] Run the maps with longer sequences
 * [ ] Implement in the continuous case
     * inverted pendulum could be a good start
 
@@ -21,12 +21,16 @@ Reproduce some of the results posted in order to be able to take it as a startin
 # Proposed approach
 
 1. inverse model of action sequence (_tl;dr predict action out of states w/ log-likelihood_)
-1. normalized distribution prediction (_tl;dr predict log-likelihood w/ MSE_)
-
-Compute empowerment with resulting function which is learned inside step \#2 above.
+1. normalized distribution prediction with two models (_tl;dr predict log-likelihood w/ MSE_)
+1. compute empowerment with the normalization constant estimator $\phi$ from step \#2.
 
 **They also train a feature extractor on top of all this, however it doesn't change much of the general approach and isn't required for discrete states**
 
+# Environments
+
+## Discrete and deterministic environments
+
+Some simplified environments were used in the original paper. These same environments are implemented in [this file](src/custom_envs/static_envs.py) using an api like OpenAI's `gym`.
 
 # Blahut-Arimoto algorithm
 
