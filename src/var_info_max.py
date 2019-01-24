@@ -25,7 +25,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 @click.option('--iter-per-eval', type=int, default=10000)
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--source-beta', type=float, default=1.0)
-@click.option('--out-file', '-o', type=click.Path(dir_okay=False, writable=True), default=None)
+@click.option('--out-file-map', type=click.Path(dir_okay=False, writable=True), default=None)
+@click.option('--out-dir-model', type=click.Path(file_okay=False, writable=True), default=None)
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--samples-per-train', type=int, default=100)
 def main(**kwargs):
@@ -36,7 +37,8 @@ def main(**kwargs):
     iter_per_eval = kwargs.get('iter_per_eval')
     max_iter = kwargs.get('max_iter')
     source_beta = kwargs.get('source_beta')
-    out_file = kwargs.get('out_file')
+    out_file_map = kwargs.get('out_file_map')
+    out_dir_model = kwargs.get('out_dir_model')
     memory_size = kwargs.get('memory_size')
     samples_per_train = kwargs.get('samples_per_train')
 
@@ -85,11 +87,13 @@ def main(**kwargs):
             avg_loss_source = cumul_loss_source / iter_per_eval
             empowerment_map = agent.compute_empowerment_map(env)
 
+            if out_dir_model is not None:
+                agent.save_models(out_dir=out_dir_model)
             utils.log_empowerment_map(writer, empowerment_map,
                                       mask=env.grid != env.free,
                                       tag='empowerment_{}_steps/{}'.format(num_steps, env_name),
                                       global_step=iter,
-                                      file_name=out_file)
+                                      file_name=out_file_map)
             writer.add_scalar('loss/decoder', avg_loss_decoder, iter)
             writer.add_scalar('loss/source', avg_loss_source, iter)
             writer.add_scalar('empowerment/avg', (empowerment_map * env.grid).mean(), iter)

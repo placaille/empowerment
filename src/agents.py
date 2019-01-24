@@ -1,4 +1,5 @@
 import torch
+import os
 
 import numpy as np
 import seaborn as sns
@@ -125,3 +126,9 @@ class DiscreteStaticAgent(object):
             seq_logits = self.model_source_distr(obs.to(self.device))
             seq_distr = Categorical(logits=seq_logits)
         return seq_distr.sample().item()
+
+    def save_models(self, out_dir):
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        self.model_phi.save(os.path.join(out_dir, 'phi.pth'))
+        self.model_source_distr.save(os.path.join(out_dir, 'source_distr.pth'))
