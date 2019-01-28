@@ -127,8 +127,9 @@ class DiscreteStaticAgent(object):
             seq_distr = Categorical(logits=seq_logits)
         return seq_distr.sample().item()
 
-    def save_models(self, out_dir):
+    def save_models(self, tag, out_dir):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
-        self.model_phi.save(os.path.join(out_dir, 'phi.pth'))
-        self.model_source_distr.save(os.path.join(out_dir, 'source_distr.pth'))
+        self.decoder.save(os.path.join(out_dir, tag + 'decoder.pth'))
+        self.model_phi.save(os.path.join(out_dir, tag + 'phi.pth'))
+        self.model_source_distr.save(os.path.join(out_dir, tag + 'source_distr.pth'))
