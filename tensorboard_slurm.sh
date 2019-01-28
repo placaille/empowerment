@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin bash
 # originally taken from
 # https://gist.github.com/taylorpaul/250ee3ed2524e8c28ee7c58ed656a5b9
 
@@ -15,7 +15,7 @@ while getopts l: flag; do
   esac
 done
 
-source activate var-info-max
+source activate tensorboard
 
 let ipnport=($UID-6025)%65274
 echo ipnport=$ipnport
