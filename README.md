@@ -2,7 +2,7 @@
 
 This serves as a repo for reproducing the paper entitled [Variational Information Maximization  for Intrinsically Motivated Reinforcement Learning](http://papers.nips.cc/paper/5668-variational-information-maximisation-for-intrinsically-motivated-reinforcement-learning.pdf)
 
-# TODO
+## TODO
 * [X] Make basic environments that will allow for testing
 * [X] Implement basic empowerment estimation from paper
     * [X] Decoder to predict which sequence of actions was taken (log-likelihood)
@@ -14,11 +14,11 @@ This serves as a repo for reproducing the paper entitled [Variational Informatio
 * [ ] Implement in the continuous case
     * inverted pendulum could be a good start
 
-# Objective
+## Objective
 
 Reproduce some of the results posted in order to be able to take it as a starting point to build a new approach to compute the empowerment.
 
-# Proposed approach
+## Proposed approach
 
 1. inverse model of action sequence (_tl;dr predict action out of states w/ log-likelihood_)
 1. normalized distribution prediction with two models (_tl;dr predict log-likelihood w/ MSE_)
@@ -26,13 +26,13 @@ Reproduce some of the results posted in order to be able to take it as a startin
 
 **They also train a feature extractor on top of all this, however it doesn't change much of the general approach and isn't required for discrete states**
 
-# Environments
+## Environments
 
-## Discrete and deterministic environments
+### Discrete and deterministic environments
 
 Some simplified environments were used in the original paper. These same environments are implemented in [this file](src/custom_envs/static_envs.py) using an api like OpenAI's `gym`.
 
-# Blahut-Arimoto algorithm
+## Blahut-Arimoto algorithm
 
 As a way of comparing the estimates of the empowerment, we need a true measure of it. To achieve this, the Blahut-Arimoto (BA) algorithm can be used to compute it.
 
@@ -40,7 +40,7 @@ Conceptually speaking, the BA algorithm is an EM algorithm that initializes the 
 
 The paper [Empowerment for Continuous Agent-Environment Systems](https://arxiv.org/abs/1201.6583) details grealy how to run the algorhtm. The implementation used in this repo can be found in [here](src/blahut_arimoto.py).
 
-## Deterministic environment
+### Deterministic environment
 
 Given a simplified environment with deterministic state transitions, the computation of the Blahut-Arimoto algorithm can be simplified greatly. In particular, when running the expectation step of the Blahut-Arimoto algorithm, the marginal distribution of reachable states given the current location needs to be computed over the possible sequences of actions.
 
