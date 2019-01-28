@@ -9,7 +9,7 @@ This serves as a repo for reproducing the paper entitled [Variational Informatio
     * [X] Source network
     * [X] Verify the empowerment computed is correct for at least one single state
 * [X] Implement true empowerment algorithm (Blahut-Arimoto)
-* [ ] Expand the documentation in the repo [see this section](#blahut-arimoto-algorithm)
+* [X] Expand the documentation in the repo
 * [X] Run the maps with longer sequences
 * [ ] Implement in the continuous case
     * inverted pendulum could be a good start
@@ -42,8 +42,10 @@ The paper [Empowerment for Continuous Agent-Environment Systems](https://arxiv.o
 
 ## Deterministic environment
 
-Given a simplified environment with deterministic state transitions, the computation of the Blahut-Arimoto algorithm can be simplified greatly.
+Given a simplified environment with deterministic state transitions, the computation of the Blahut-Arimoto algorithm can be simplified greatly. In particular, when running the expectation step of the Blahut-Arimoto algorithm, the marginal distribution of reachable states given the current location needs to be computed over the possible sequences of actions.
 
-In particular, the marginal distribution of reachable states given the current location can be simplified. Indeed, given the ultimate state to be reached `s'`, the marginal probability of reaching that state from origin state `s` is the sum of the probabilities of the action sequences (under the behavior policy) that allow to reach that ultimate state `s'`. This simplification is possible because of the deterministic properties of the environment's state transitions.
+Computing that marginal could be very expensive in an environment with stochastic state transitions, as all of the possible ways of reaching another state would need to be explored during the computation. Thankfully, in this simplified setting with deterministic (static) environments, the dynamics of the transitions can be exploited to make the marginal easier to compute.
+
+Indeed, given the ultimate state to be reached `s'`, the marginal probability of reaching that state from origin state `s` is the sum of the probabilities of the action sequences (under the behavior policy, i.e. source distribution) that allow to reach that ultimate state `s'`. This simplifies greatly the computatation since we only need to make deterministic rollouts at each state and use that information to find which state can lead to others.
 
 Considering the simplified environment with a reasonable state and action size, all possible rollouts can be computed with moderate effort. This in turn makes it easy to determine all the possible paths that lead to a given state, which is the most computationally intensive part of the algorithm.
