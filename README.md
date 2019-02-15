@@ -8,9 +8,9 @@ In addition, this repo serves as a way of reproducing the paper entitled [Variat
 
 ### MINE
 * [X] Unbiased gradient estimate
-* [ ] Reproduce the source policy from var-info-max
-    * [ ] 2 step
-    * [ ] 5 step
+* [X] Reproduce the source policy from var-info-max
+    * [X] 2 step
+    * [X] 5 step
 * [ ] Use policy gradient to derive source policy
 
 
