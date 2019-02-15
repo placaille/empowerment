@@ -1,11 +1,14 @@
 import gym
 import click
 import torch
+import sys
 
 from itertools import count
 from collections import deque
 from tensorboardX import SummaryWriter
 from timeit import default_timer as timer
+
+sys.path.append('src')
 
 # custom code
 import custom_envs
@@ -15,6 +18,7 @@ import utils
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 @click.command(cls=utils.CommandWithConfigFile('config_file'))
+@click.option('--config-file', '-c', type=click.Path(exists=True, dir_okay=False))
 @click.argument('env-name', type=click.Choice([
     'TwoRoom-v0',
     'CrossRoom-v0',

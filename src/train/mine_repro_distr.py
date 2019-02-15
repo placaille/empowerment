@@ -2,6 +2,7 @@ import gym
 import click
 import torch
 import os
+import sys
 import numpy as np
 import pickle as pkl
 
@@ -9,6 +10,8 @@ from itertools import count
 from collections import deque, namedtuple
 from tensorboardX import SummaryWriter
 from timeit import default_timer as timer
+
+sys.path.append('src')
 
 # custom code
 import custom_envs
