@@ -14,7 +14,7 @@ import utils
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-@click.command()
+@click.command(cls=utils.CommandWithConfigFile('config_file'))
 @click.argument('env-name', type=click.Choice([
     'TwoRoom-v0',
     'CrossRoom-v0',
@@ -46,7 +46,7 @@ def main(**kwargs):
     env = gym.make(env_name)
 
     print('Initializing agent and models..')
-    agent = agents.DiscreteStaticAgent(
+    agent = agents.VarInfoDiscreteStaticAgent(
         actions=env.actions,
         observation_size=env.observation_space.n,
         hidden_size=hidden_size,

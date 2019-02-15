@@ -1,4 +1,4 @@
-name: var-info-max
+name: augusta
 channels:
   - defaults
   - pytorch

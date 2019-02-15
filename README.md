@@ -1,8 +1,20 @@
-# Variational Information Maximization
+# Augusta
 
-This serves as a repo for reproducing the paper entitled [Variational Information Maximization  for Intrinsically Motivated Reinforcement Learning](http://papers.nips.cc/paper/5668-variational-information-maximisation-for-intrinsically-motivated-reinforcement-learning.pdf)
+Incorporating adversarial objective in quest for empowerment.
+
+In addition, this repo serves as a way of reproducing the paper entitled [Variational Information Maximization  for Intrinsically Motivated Reinforcement Learning](http://papers.nips.cc/paper/5668-variational-information-maximisation-for-intrinsically-motivated-reinforcement-learning.pdf).
 
 ## TODO
+
+### MINE
+* [X] Unbiased gradient estimate
+* [ ] Reproduce the source policy from var-info-max
+    * [ ] 2 step
+    * [ ] 5 step
+* [ ] Use policy gradient to derive source policy
+
+
+### Variational Information Maximization
 * [X] Make basic environments that will allow for testing
 * [X] Implement basic empowerment estimation from paper
     * [X] Decoder to predict which sequence of actions was taken (log-likelihood)
@@ -11,6 +23,7 @@ This serves as a repo for reproducing the paper entitled [Variational Informatio
 * [X] Implement true empowerment algorithm (Blahut-Arimoto)
 * [X] Expand the documentation in the repo
 * [X] Run the maps with longer sequences
+
 * [ ] Implement in the continuous case
     * inverted pendulum could be a good start
 

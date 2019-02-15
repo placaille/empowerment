@@ -1,0 +1,5 @@
+arg1: ''
+arg2: 32
+arg3: False
+# arg_not_read: value_not_read
+not_a_real_arg: value_not_read

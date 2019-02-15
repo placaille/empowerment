@@ -10,8 +10,8 @@ def log_empowerment_map(writer, map, mask, tag, global_step=0, file_name=None):
         ax = sns.heatmap(map, mask=mask, cmap='viridis', xticklabels=False, yticklabels=False)
 
     if file_name is not None:
-        if not file_name.endswith('.jpg'):
-            file_name + '.jpg'
+        if not os.path.exists(os.path.dirname(file_name)):
+            os.makedirs(os.path.dirname(file_name))
         plt.savefig(file_name)
 
     # log to tensorboardX

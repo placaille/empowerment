@@ -2,3 +2,5 @@
 .ftpconfig
 runs/
 models/
+.jobs/
+.configs/
