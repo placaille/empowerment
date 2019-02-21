@@ -1,1 +1,0 @@
-{'config_file': None, 'env_name': 'TwoRoom-v0', 'pre_trained_dir': None, 'log_dir': './', 'num_steps': 2, 'hidden_size': 32, 'iter_per_eval': 1000, 'max_iter': 1000000, 'ema_beta': 0.1, 'emp_alpha': 0.1, 'memory_size': 100000, 'samples_per_train': 100, 'batch_size': 128}
