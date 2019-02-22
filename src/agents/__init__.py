@@ -1,3 +1,3 @@
 from .var_info_max import VarInfoDiscreteStaticAgent
 from .mine_repro_distr import MineReproDiscreteStaticAgent
-from .mine_pol_grad import MinePolGradDiscreteStaticAgent
+from .fgan_repro_distr import fGANReproDiscreteStaticAgent

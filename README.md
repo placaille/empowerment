@@ -4,6 +4,16 @@ Incorporating adversarial objective in quest for empowerment.
 
 In addition, this repo serves as a way of reproducing the paper entitled [Variational Information Maximization  for Intrinsically Motivated Reinforcement Learning](http://papers.nips.cc/paper/5668-variational-information-maximisation-for-intrinsically-motivated-reinforcement-learning.pdf).
 
+## f-GAN
+* [ ] Implement the multiple losses based on different measures
+    * [ ] Kullback-Leibler (KL)
+    * [ ] Jensen-Shannon (JS)
+* [ ] Reproduce the source policy from var-info-max
+    * [ ] 2 step
+    * [ ] 5 step
+* [ ] Add documentation in README
+* [ ] Use policy gradient to derive source policy
+
 ## MINE
 
 ### TODO
