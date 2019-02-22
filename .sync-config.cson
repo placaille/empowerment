@@ -17,6 +17,7 @@ option:
         '.sync-config.cson'
         '.git'
         '*__pycache__'
+        './out/'
     ]
     flags: 'avzpur'         # Advanced option: rsync flags
     shell: 'ssh'
