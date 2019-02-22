@@ -20,6 +20,9 @@ done
 source activate tensorboard
 
 let ipnport=($UID-6025)%65274
+if [ $(($ipnport)) -le "0" ] ; then
+  ipnport=6006
+fi
 echo ipnport=$ipnport
 
 ipnip=$(hostname -i)
