@@ -58,7 +58,8 @@ class fGANReproDiscreteStaticAgent(object):
         self.seq_onehot.scatter_(1, seq_id, 1.0)
         return self.seq_onehot
 
-    def score_train_step(self, batch):
+    def score_train_step(self):
+        batch = self.memory.sample_data(self.max_batch_size)
 
         obs_start = torch.FloatTensor(batch.obs_start)
         obs_end = torch.FloatTensor(batch.obs_end)
@@ -67,28 +68,29 @@ class fGANReproDiscreteStaticAgent(object):
         seq_id = [self.actions_seqs[self._convert_act_list_to_str(seq)] for seq in batch.act_seq]
         seq_id = torch.LongTensor(seq_id)
         act_seq = self._convert_seq_id_to_onehot(seq_id.unsqueeze(1))
+        act_seq_shfld = act_seq[torch.randperm(act_seq.shape[0])]
 
         stack_joint = torch.cat([obs_start, obs_end, act_seq], dim=1)
-        stack_marginal = torch.cat([obs_start, obs_end_shfld, act_seq], dim=1)
+        stack_marginal = torch.cat([obs_start, obs_end, act_seq_shfld], dim=1)
 
-        score_joint = self.model_score(stack_joint.to(self.device))
-        score_marginal = self.model_score(stack_marginal.to(self.device))
+        logits_joint = self.model_score(stack_joint.to(self.device))
+        logits_marginal = self.model_score(stack_marginal.to(self.device))
 
-        loss_score = -self.obj_score(score_joint, score_marginal)
+        net_scores = self.obj_score(logits_joint, logits_marginal)
+        emp_value = net_scores.data.squeeze()
+        loss_score = -net_scores.mean()
 
         self.optim_score.zero_grad()
         loss_score.backward()
         self.optim_score.step()
 
-        self._update_emp_values(batch, -loss_score.item())
+        self._update_emp_values(obs_start, emp_value)
         return loss_score.item()
 
-    def _update_emp_values(self, batch, empowerment_value):
-        # all data in batch should be same state
-        assert np.allclose(batch.obs_start, batch.obs_start)
-        state = batch.obs_start[0].argmax()
-        self.empowerment_states[state] = (1-self.alpha)*self.empowerment_states[state] + \
-                                         self.alpha * empowerment_value
+    def _update_emp_values(self, obs_start, empowerment_value):
+        states = obs_start.argmax(dim=1)
+        for (state, emp) in zip(states, empowerment_value):
+            self.empowerment_states[state] += self.alpha * (emp - self.empowerment_states[state])
 
     def compute_empowerment_map(self, env):
         states_i, states_j = zip(*env.free_pos)

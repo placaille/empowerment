@@ -37,8 +37,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 @click.option('--hidden-size', type=int, default=32)
 @click.option('--iter-per-eval', type=int, default=1000)
 @click.option('--max-iter', type=int, default=1000000)
-@click.option('--ema-beta', type=float, default=0.1, help='Unbiased exponential moving average weight (def. 0.1)')
-@click.option('--emp-alpha', type=float, default=0.1, help='Emp table moving average weight (def. 0.1)')
+@click.option('--emp-alpha', type=float, default=0.001, help='Emp table moving average weight (def. 0.001)')
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--samples-per-train', type=int, default=100)
 @click.option('--batch_size', type=int, default=128)
@@ -73,8 +72,8 @@ def main(**kwargs):
         emp_num_steps=num_steps,
         alpha=emp_alpha,
         divergence_name=diverg_name,
-        mem_size=0,
-        mem_fields=[],
+        mem_size=memory_size,
+        mem_fields=['obs_start', 'obs_end', 'act_seq'],
         max_batch_size=batch_size,
         path_source_distr=source_distr_path,
         device=device,
@@ -84,24 +83,21 @@ def main(**kwargs):
     writer = SummaryWriter(log_dir)
     writer.add_text('args', str(kwargs))
     action_seq = deque(maxlen=num_steps)
-    transition = namedtuple('transition', ['obs_start', 'obs_end', 'act_seq'])
     cumul_loss_score = 0
     start = timer()
 
     print('Starting training..')
     for iter in count(start=1):
-        state_init = env.observation_space.sample()
-        batch = []
-        for _ in range(batch_size):
-            obs = env.reset(state=state_init)
+        for _ in range(samples_per_train):
+            obs = env.reset()
             prev_obs = obs
-            actions_str = agent.actions_keys[agent.sample_source_distr(obs)]
-            for action in actions_str:
-                action_seq.append(int(action))
-                obs = env.step(int(action))
-            batch.append(transition(obs_start=prev_obs, obs_end=obs, act_seq=list(action_seq)))
+            for _ in range(num_steps):
+                action = env.action_space.sample()
+                action_seq.append(action)
+                obs = env.step(action)
 
-        loss_score = agent.score_train_step(transition(*zip(*batch)))
+            agent.memory.add_data(obs_start=prev_obs, obs_end=obs, act_seq=list(action_seq))
+        loss_score = agent.score_train_step()
         cumul_loss_score += loss_score
 
         if iter % iter_per_eval == 0 or iter == max_iter:

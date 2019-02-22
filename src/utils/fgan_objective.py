@@ -26,4 +26,4 @@ class fGAN:
         """
         objective (to maximize) for the discriminator
         """
-        return self.constant + self.pos_score(pos_logits).mean() - self.neg_score(neg_logits).mean()
+        return self.constant*pos_logits.shape[0] + self.pos_score(pos_logits) - self.neg_score(neg_logits)
