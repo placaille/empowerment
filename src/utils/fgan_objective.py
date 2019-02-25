@@ -26,4 +26,5 @@ class fGAN:
         """
         objective (to maximize) for the discriminator
         """
-        return self.constant*pos_logits.shape[0] + self.pos_score(pos_logits) - self.neg_score(neg_logits)
+        constant = torch.tensor(self.constant).float().expand(pos_logits.shape[0], 1)
+        return constant + self.pos_score(pos_logits) - self.neg_score(neg_logits)

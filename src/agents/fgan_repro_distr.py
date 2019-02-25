@@ -63,7 +63,6 @@ class fGANReproDiscreteStaticAgent(object):
 
         obs_start = torch.FloatTensor(batch.obs_start)
         obs_end = torch.FloatTensor(batch.obs_end)
-        obs_end_shfld = obs_end[torch.randperm(obs_end.shape[0])]
 
         seq_id = [self.actions_seqs[self._convert_act_list_to_str(seq)] for seq in batch.act_seq]
         seq_id = torch.LongTensor(seq_id)
