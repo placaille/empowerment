@@ -6,10 +6,10 @@ In addition, this repo serves as a way of reproducing the paper entitled [Variat
 
 ## f-GAN
 * [ ] Implement the multiple losses based on different measures
-    * [ ] Kullback-Leibler (KL)
-    * [ ] Jensen-Shannon (JS)
+    * [X] Kullback-Leibler (KL)
+    * [X] Jensen-Shannon (JS)
 * [ ] Reproduce the source policy from var-info-max
-    * [ ] 2 step
+    * [X] 2 step
     * [ ] 5 step
 * [ ] Add documentation in README
 * [ ] Use policy gradient to derive source policy

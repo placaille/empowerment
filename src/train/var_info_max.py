@@ -93,7 +93,7 @@ def main(**kwargs):
 
             if out_dir_model is not None:
                 agent.save_models(tag=env_name+'_', out_dir=out_dir_model)
-            utils.log_empowerment_map(writer, empowerment_map,
+            utils.log_value_map(writer, empowerment_map,
                                       mask=env.grid != env.free,
                                       tag='empowerment_{}_steps/{}'.format(num_steps, env_name),
                                       global_step=iter,

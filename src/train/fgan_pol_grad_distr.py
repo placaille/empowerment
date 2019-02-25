@@ -27,31 +27,36 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     'CrossRoom-v0',
     'RoomPlus2Corrid-v0',
 ]))
-@click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True))
-@click.option('--log-dir', type=click.Path(file_okay=False, exists=True, writable=True), default='./')
+@click.option('--diverg-name', default='js', type=click.Choice([
+    'js',
+    'kl'
+]))
+@click.option('--log-dir', type=click.Path(file_okay=False, exists=True, writable=True), default='./out')
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--hidden-size', type=int, default=32)
 @click.option('--iter-per-eval', type=int, default=1000)
 @click.option('--max-iter', type=int, default=1000000)
-@click.option('--ema-beta', type=float, default=0.1, help='Unbiased exponential moving average weight (def. 0.1)')
-@click.option('--emp-alpha', type=float, default=0.1, help='Emp table moving average weight (def. 0.1)')
+@click.option('--emp-alpha', type=float, default=0.001, help='Emp table moving average weight (def. 0.001)')
+@click.option('--entropy-weight', type=float, default=0.1, help='Entropy weight regularization (def. 0.1)')
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--samples-per-train', type=int, default=100)
 @click.option('--batch_size', type=int, default=128)
 def main(**kwargs):
     env_name = kwargs.get('env_name')
-    pre_trained_dir = kwargs.get('pre_trained_dir')
+    diverg_name = kwargs.get('diverg_name')
     log_dir = kwargs.get('log_dir')
     num_steps = kwargs.get('num_steps')
     hidden_size = kwargs.get('hidden_size')
     iter_per_eval = kwargs.get('iter_per_eval')
     max_iter = kwargs.get('max_iter')
-    ema_beta = kwargs.get('ema_beta')
     emp_alpha = kwargs.get('emp_alpha')
+    entropy_weight = kwargs.get('entropy_weight')
     memory_size = kwargs.get('memory_size')
     samples_per_train = kwargs.get('samples_per_train')
     batch_size = kwargs.get('batch_size')
     print(kwargs)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
     with open(os.path.join(log_dir, 'args.info'), 'w') as f:
         f.write(str(kwargs))
 
@@ -59,18 +64,17 @@ def main(**kwargs):
     env = gym.make(env_name)
 
     print('Initializing agent and models..')
-    source_distr_path = os.path.join(pre_trained_dir, '{}_source_distr.pth'.format(env_name))
-    agent = agents.MineReproDiscreteStaticAgent(
+    agent = agents.fGANPolGradDiscreteStaticAgent(
         actions=env.actions,
         observation_size=env.observation_space.n,
         hidden_size=hidden_size,
         emp_num_steps=num_steps,
-        beta=ema_beta,
         alpha=emp_alpha,
-        mem_size=0,
-        mem_fields=[],
+        divergence_name=diverg_name,
+        mem_size=memory_size,
+        mem_fields=['obs_start', 'obs_end', 'act_seq'],
         max_batch_size=batch_size,
-        path_source_distr=source_distr_path,
+        entropy_weight=entropy_weight,
         device=device,
     )
 
@@ -78,48 +82,59 @@ def main(**kwargs):
     writer = SummaryWriter(log_dir)
     writer.add_text('args', str(kwargs))
     action_seq = deque(maxlen=num_steps)
-    transition = namedtuple('transition', ['obs_start', 'obs_end', 'act_seq'])
     cumul_loss_score = 0
+    cumul_loss_source_distr = 0
     start = timer()
 
     print('Starting training..')
     for iter in count(start=1):
-        state_init = env.observation_space.sample()
-        batch = []
-        for _ in range(batch_size):
-            obs = env.reset(state=state_init)
+        for _ in range(samples_per_train):
+            obs = env.reset()
             prev_obs = obs
-            actions_str = agent.actions_keys[agent.sample_source_distr(obs)]
-            for action in actions_str:
-                action_seq.append(int(action))
-                obs = env.step(int(action))
-            batch.append(transition(obs_start=prev_obs, obs_end=obs, act_seq=list(action_seq)))
+            action_seq = agent.sample_source_distr(obs)
+            for action in action_seq:
+                obs = env.step(action)
 
-        loss_score = agent.score_train_step(transition(*zip(*batch)))
+            agent.memory.add_data(obs_start=prev_obs, obs_end=obs, act_seq=action_seq)
+        loss_score, loss_source_distr = agent.train_step()
         cumul_loss_score += loss_score
+        cumul_loss_source_distr += loss_source_distr
 
         if iter % iter_per_eval == 0 or iter == max_iter:
             avg_loss_score = cumul_loss_score / iter_per_eval
+            avg_loss_source_distr = cumul_loss_source_distr / iter_per_eval
 
             empowerment_map = agent.compute_empowerment_map(env)
+            entropy_map = agent.compute_entropy_map(env)
 
-            tag='emp_{}_steps_{}'.format(num_steps, env_name)
-            agent.save_models(tag=tag+'_', out_dir=os.path.join(log_dir, 'models'))
+            tag_emp='emp_{}_steps_{}'.format(num_steps, env_name)
+            tag_ent='entropy_{}_steps_{}'.format(num_steps, env_name)
+            agent.save_models(tag=tag_emp+'_', out_dir=os.path.join(log_dir, 'models'))
             utils.log_value_map(writer, empowerment_map,
                                       mask=env.grid != env.free,
-                                      tag=tag,
+                                      tag=tag_emp,
                                       global_step=iter,
-                                      file_name=os.path.join(log_dir, 'maps', tag))
-            writer.add_scalar('loss/mine_score', avg_loss_score, iter)
+                                      file_name=os.path.join(log_dir, 'maps', tag_emp))
+            utils.log_value_map(writer, entropy_map,
+                                      mask=env.grid != env.free,
+                                      tag=tag_ent,
+                                      global_step=iter,
+                                      file_name=os.path.join(log_dir, 'maps', tag_ent))
+            writer.add_scalar('loss/fgan_score', avg_loss_score, iter)
+            writer.add_scalar('loss/source_distr', avg_loss_source_distr, iter)
             writer.add_scalar('empowerment/min', empowerment_map.min(), iter)
             writer.add_scalar('empowerment/max', empowerment_map.max(), iter)
+            writer.add_scalar('entropy/min', entropy_map.min(), iter)
+            writer.add_scalar('entropy/max', entropy_map.max(), iter)
 
-            print('iter {:8d} - loss mine {:6.4f} - {:4.1f}s'.format(
+            print('iter {:8d} - loss score/distr {:6.4f}/{:6.4f} - {:4.1f}s'.format(
                 iter,
                 avg_loss_score,
+                avg_loss_source_distr,
                 timer() - start,
             ))
             cumul_loss_score = 0
+            cumul_loss_source_distr = 0
             start = timer()
 
         if iter >= max_iter:

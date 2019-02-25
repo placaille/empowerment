@@ -4,7 +4,7 @@ plt.switch_backend('agg')
 import os
 import seaborn as sns
 
-def log_empowerment_map(writer, map, mask, tag, global_step=0, file_name=None):
+def log_value_map(writer, map, mask, tag, global_step=0, file_name=None):
     fig = plt.figure()
     with sns.axes_style("white"):
         ax = sns.heatmap(map, mask=mask, cmap='viridis', xticklabels=False, yticklabels=False)

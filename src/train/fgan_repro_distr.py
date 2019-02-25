@@ -107,7 +107,7 @@ def main(**kwargs):
 
             tag='emp_{}_steps_{}'.format(num_steps, env_name)
             agent.save_models(tag=tag+'_', out_dir=os.path.join(log_dir, 'models'))
-            utils.log_empowerment_map(writer, empowerment_map,
+            utils.log_value_map(writer, empowerment_map,
                                       mask=env.grid != env.free,
                                       tag=tag,
                                       global_step=iter,

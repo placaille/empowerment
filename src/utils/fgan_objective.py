@@ -7,8 +7,12 @@ class fGAN:
         """
         divergence_name (str): ['kl', 'js']
 
+        score/discriminator obj
         kl: E_pos[logits] - E_neg[exp(logits-1)]
         js: E_pos[log(sigmoid(logits))] - E_neg[-log(1-sigmoid(logits))]
+
+        source distr obj
+
         """
         assert divergence_name in ['kl', 'js'], 'invalid name'
         self.divergence_name = divergence_name
@@ -22,9 +26,10 @@ class fGAN:
             self.pos_score = lambda logits: F.logsigmoid(logits)
             self.neg_score = lambda logits: -(F.logsigmoid(logits) - logits)
 
-    def discr_obj(self, pos_logits, neg_logits):
+    def discr_obj(self, pos_logits, neg_logits, mean=False):
         """
         objective (to maximize) for the discriminator
+        *** RETURNS ALL ELEMENTS IN TENSORS (NOT THE MEAN)
         """
         constant = torch.tensor(self.constant).float().expand(pos_logits.shape[0], 1)
-        return constant + self.pos_score(pos_logits) - self.neg_score(neg_logits)
+        return constant, self.pos_score(pos_logits), self.neg_score(neg_logits)

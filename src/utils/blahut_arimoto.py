@@ -98,7 +98,7 @@ def main(env_name, num_steps, epsilon, out_file):
     empowerment_map = np.full(env.grid.shape, empowerment.mean(), dtype=np.float32)
     empowerment_map[states_i, states_j] = empowerment
 
-    utils.log_empowerment_map(writer, empowerment_map,
+    utils.log_value_map(writer, empowerment_map,
                               mask=env.grid != env.free,
                               tag='true_empowerment_{}_steps/{}'.format(num_steps, env_name),
                               file_name=out_file)
