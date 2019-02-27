@@ -124,13 +124,15 @@ def main(**kwargs):
             writer.add_scalar('loss/source_distr', avg_loss_source_distr, iter)
             writer.add_scalar('empowerment/min', empowerment_map.min(), iter)
             writer.add_scalar('empowerment/max', empowerment_map.max(), iter)
+            writer.add_scalar('entropy/avg', entropy_map.mean(), iter)
             writer.add_scalar('entropy/min', entropy_map.min(), iter)
             writer.add_scalar('entropy/max', entropy_map.max(), iter)
 
-            print('iter {:8d} - loss score/distr {:6.4f}/{:6.4f} - {:4.1f}s'.format(
+            print('iter {:8d} - loss score/distr {:6.4f}/{:6.4f} - entropy {:6.4f} - {:4.1f}s'.format(
                 iter,
                 avg_loss_score,
                 avg_loss_source_distr,
+                entropy_map.mean(),
                 timer() - start,
             ))
             cumul_loss_score = 0

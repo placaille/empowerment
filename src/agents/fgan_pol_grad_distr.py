@@ -69,13 +69,10 @@ class fGANPolGradDiscreteStaticAgent(object):
 
         seq_id = [self.actions_seqs[self._convert_act_list_to_str(seq)] for seq in batch.act_seq]
         seq_id = torch.LongTensor(seq_id).unsqueeze(1).to(self.device)
-        act_seq = self._convert_seq_id_to_onehot(seq_id)
-        import pdb;pdb.set_trace()
-        log_prob, entropy = self.get_log_prob(obs_start, seq_id)
+        seq_id_shfld = seq_id[torch.randperm(seq_id.shape[0])]
 
-        shfl_perm = torch.randperm(act_seq.shape[0])
-        act_seq_shfld = act_seq[shfl_perm].to(self.device)
-        log_prob_shfled = log_prob[shfl_perm].to(self.device)
+        act_seq = self._convert_seq_id_to_onehot(seq_id)
+        act_seq_shfld = self._convert_seq_id_to_onehot(seq_id_shfld)
 
         stack_joint = torch.cat([obs_start, obs_end, act_seq], dim=1)
         stack_marginal = torch.cat([obs_start, obs_end, act_seq_shfld], dim=1)
@@ -83,21 +80,22 @@ class fGANPolGradDiscreteStaticAgent(object):
         logits_joint = self.model_score(stack_joint.to(self.device))
         logits_marginal = self.model_score(stack_marginal.to(self.device))
 
-        constant, pos_scores, neg_scores = self.obj_score(logits_joint, logits_marginal)
-        net_scores = constant + pos_scores - neg_scores
-        emp_value = net_scores.data
-        loss_score = - net_scores.mean()
+        constant, scores_joint, scores_marginal = self.obj_score(logits_joint, logits_marginal)
+        scores_net = constant + scores_joint - scores_marginal
+        emp_value = scores_net.data
+        loss_score = - (constant.mean() + scores_joint.mean() - scores_marginal.mean())
 
-        # source distribution network
-        pos_advantage = pos_scores.detach()
-        neg_advantage = -neg_scores.detach()
+        # source distribution (generator) network
+        log_prob, entropy = self.get_log_prob(obs_start, seq_id)
+        log_prob_shfld, _ = self.get_log_prob(obs_start, seq_id_shfld)
 
-        obj_pos = log_prob * pos_advantage
-        obj_neg = log_prob_shfled * neg_advantage
+        signal_joint = log_prob * scores_joint.detach()
+        signal_marginal = log_prob_shfld * scores_marginal.detach()
 
-        loss_source_distr = -torch.cat([obj_pos, obj_neg]).mean()
+        loss_source_distr = -(signal_joint.mean() - signal_marginal.mean())
+        entropy_reg = - self.entropy_weight * entropy.mean()
 
-        loss_total = loss_score + loss_source_distr - self.entropy_weight * entropy.mean()
+        loss_total = loss_score + loss_source_distr + entropy_reg
         self.optim_all.zero_grad()
         loss_total.backward()
         self.optim_all.step()
@@ -133,15 +131,16 @@ class fGANPolGradDiscreteStaticAgent(object):
         return entropy_map
 
     def sample_source_distr(self, obs):
-        obs = torch.FloatTensor(obs).unsqueeze(0)
-        seq_logits = self.model_source_distr(obs.to(self.device)).cpu()
-        seq_distr = Categorical(logits=seq_logits)
+        obs = torch.FloatTensor(obs)
+        with torch.no_grad():
+            seq_logits = self.model_source_distr(obs.to(self.device)).cpu()
+            seq_distr = Categorical(logits=seq_logits)
         return self.actions_lists[seq_distr.sample().item()]
 
     def get_log_prob(self, obs, seq_id):
         seq_logits = self.model_source_distr(obs)
-        p_log_p = F.softmax(seq_logits, dim=1) * seq_logits
-        return F.log_softmax(seq_logits, dim=1).gather(1, seq_id), -p_log_p.sum(-1)
+        seq_distr = Categorical(logits=seq_logits)
+        return F.log_softmax(seq_logits, dim=1).gather(1, seq_id), seq_distr.entropy()
 
     def save_models(self, tag, out_dir):
         if not os.path.exists(out_dir):
