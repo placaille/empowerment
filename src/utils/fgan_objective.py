@@ -32,4 +32,4 @@ class fGAN:
         *** RETURNS ALL ELEMENTS IN TENSORS (NOT THE MEAN)
         """
         constant = torch.tensor(self.constant).float().expand(pos_logits.shape[0], 1)
-        return constant, self.pos_score(pos_logits), self.neg_score(neg_logits)
+        return constant.to(pos_logits.device), self.pos_score(pos_logits), self.neg_score(neg_logits)

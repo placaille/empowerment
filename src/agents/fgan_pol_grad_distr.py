@@ -57,24 +57,25 @@ class fGANPolGradDiscreteStaticAgent(object):
         return ''.join([str(x) for x in actions])
 
     def _convert_seq_id_to_onehot(self, seq_id):
-        self.seq_onehot = torch.zeros(seq_id.shape[0], self.num_actions_seqs)
+        self.seq_onehot = torch.zeros(seq_id.shape[0], self.num_actions_seqs).to(self.device)
         self.seq_onehot.scatter_(1, seq_id, 1.0)
         return self.seq_onehot
 
     def train_step(self):
         batch = self.memory.sample_data(self.max_batch_size)
 
-        obs_start = torch.FloatTensor(batch.obs_start)
-        obs_end = torch.FloatTensor(batch.obs_end)
+        obs_start = torch.FloatTensor(batch.obs_start).to(self.device)
+        obs_end = torch.FloatTensor(batch.obs_end).to(self.device)
 
         seq_id = [self.actions_seqs[self._convert_act_list_to_str(seq)] for seq in batch.act_seq]
-        seq_id = torch.LongTensor(seq_id).unsqueeze(1)
+        seq_id = torch.LongTensor(seq_id).unsqueeze(1).to(self.device)
         act_seq = self._convert_seq_id_to_onehot(seq_id)
+        import pdb;pdb.set_trace()
         log_prob, entropy = self.get_log_prob(obs_start, seq_id)
 
         shfl_perm = torch.randperm(act_seq.shape[0])
-        act_seq_shfld = act_seq[shfl_perm]
-        log_prob_shfled = log_prob[shfl_perm]
+        act_seq_shfld = act_seq[shfl_perm].to(self.device)
+        log_prob_shfled = log_prob[shfl_perm].to(self.device)
 
         stack_joint = torch.cat([obs_start, obs_end, act_seq], dim=1)
         stack_marginal = torch.cat([obs_start, obs_end, act_seq_shfld], dim=1)
@@ -138,8 +139,7 @@ class fGANPolGradDiscreteStaticAgent(object):
         return self.actions_lists[seq_distr.sample().item()]
 
     def get_log_prob(self, obs, seq_id):
-        obs = torch.FloatTensor(obs)
-        seq_logits = self.model_source_distr(obs.to(self.device))
+        seq_logits = self.model_source_distr(obs)
         p_log_p = F.softmax(seq_logits, dim=1) * seq_logits
         return F.log_softmax(seq_logits, dim=1).gather(1, seq_id), -p_log_p.sum(-1)
 
