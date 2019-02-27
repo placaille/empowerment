@@ -92,6 +92,12 @@ class fGANPolGradDiscreteStaticAgent(object):
         signal_joint = log_prob * scores_joint.detach()
         signal_marginal = log_prob_shfld * scores_marginal.detach()
 
+        obs_start_id = obs_start.argmax(dim=1)
+        baseline = torch.FloatTensor(self.empowerment_states[obs_start_id]).to(self.device)
+
+        advantage_joint = (signal_joint - baseline)
+        advantage_marginal = (signal_marginal - baseline)
+
         loss_source_distr = -(signal_joint.mean() - signal_marginal.mean())
         entropy_reg = - self.entropy_weight * entropy.mean()
 
