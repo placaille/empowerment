@@ -1,7 +1,10 @@
 remote:
     host: "mila2",       # server name or ip or ssh host abbr in .ssh/config
+    # host: "birdie"
     user: "lacaillp",       # ssh username
+    # host: "phil"
     path: "/network/home/lacaillp/Repos/augusta"      # e.g. /home/someone/somewhere
+    # host: "/home/phil/Repos/augusta"
 
 behaviour:
     uploadOnSave: false      # Upload every time you save a file
