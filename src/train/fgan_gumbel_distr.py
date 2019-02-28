@@ -3,6 +3,7 @@ import click
 import torch
 import os
 import sys
+import shutil
 import numpy as np
 import pickle as pkl
 
@@ -38,6 +39,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--emp-alpha', type=float, default=0.001, help='Emp table moving average weight (def. 0.001)')
 @click.option('--entropy-weight', type=float, default=0.1, help='Entropy weight regularization (def. 0.1)')
+@click.option('--gumbel-temp', type=float, default=2.0, help='Temperature for Gumbel-Softax (def. 2.0)')
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--samples-per-train', type=int, default=100)
 @click.option('--batch_size', type=int, default=128)
@@ -50,14 +52,12 @@ def main(**kwargs):
     iter_per_eval = kwargs.get('iter_per_eval')
     max_iter = kwargs.get('max_iter')
     emp_alpha = kwargs.get('emp_alpha')
+    gumbel_temp = kwargs.get('gumbel_temp')
     entropy_weight = kwargs.get('entropy_weight')
     memory_size = kwargs.get('memory_size')
     samples_per_train = kwargs.get('samples_per_train')
     batch_size = kwargs.get('batch_size')
     print(kwargs)
-    if log_dir.endswith('test'):
-        if os.path.exists(log_dir)
-        os.remove(log_dir)  # if called 'test' delete and relaunch
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     with open(os.path.join(log_dir, 'args.info'), 'w') as f:
@@ -67,17 +67,17 @@ def main(**kwargs):
     env = gym.make(env_name)
 
     print('Initializing agent and models..')
-    agent = agents.fGANPolGradDiscreteStaticAgent(
+    agent = agents.fGANGumbelDiscreteStaticAgent(
         actions=env.actions,
         observation_size=env.observation_space.n,
         hidden_size=hidden_size,
         emp_num_steps=num_steps,
         alpha=emp_alpha,
         divergence_name=diverg_name,
-        mem_size=memory_size,
-        mem_fields=['obs_start', 'obs_end', 'act_seq'],
+        mem_size=batch_size,
+        mem_fields=['obs_start', 'obs_end', 'act_seq', 'seq_soft_onehot'],
         max_batch_size=batch_size,
-        entropy_weight=entropy_weight,
+        temperature=gumbel_temp,
         device=device,
     )
 
@@ -85,27 +85,30 @@ def main(**kwargs):
     writer = SummaryWriter(log_dir)
     writer.add_text('args', str(kwargs))
     action_seq = deque(maxlen=num_steps)
-    cumul_loss_score = 0
-    cumul_loss_source_distr = 0
+    cumul_loss = 0
     start = timer()
 
     print('Starting training..')
     for iter in count(start=1):
-        for _ in range(samples_per_train):
+        for _ in range(batch_size):
             obs = env.reset()
             prev_obs = obs
-            action_seq = agent.sample_source_distr(obs)
-            for action in action_seq:
+            action_seq = agent.sample_action_sequence(obs)
+            for action in action_seq['actions']:
                 obs = env.step(action)
 
-            agent.memory.add_data(obs_start=prev_obs, obs_end=obs, act_seq=action_seq)
-        loss_score, loss_source_distr = agent.train_step()
-        cumul_loss_score += loss_score
-        cumul_loss_source_distr += loss_source_distr
+            agent.memory.add_data(
+                obs_start=prev_obs,
+                obs_end=obs,
+                act_seq=action_seq['actions'],
+                seq_soft_onehot=action_seq['soft_onehot'],
+            )
+
+        loss = agent.train_step()
+        cumul_loss += loss
 
         if iter % iter_per_eval == 0 or iter == max_iter:
-            avg_loss_score = cumul_loss_score / iter_per_eval
-            avg_loss_source_distr = cumul_loss_source_distr / iter_per_eval
+            avg_loss = cumul_loss / iter_per_eval
 
             empowerment_map = agent.compute_empowerment_map(env)
             entropy_map = agent.compute_entropy_map(env)
@@ -123,23 +126,20 @@ def main(**kwargs):
                                       tag=tag_ent,
                                       global_step=iter,
                                       file_name=os.path.join(log_dir, 'maps', tag_ent))
-            writer.add_scalar('loss/fgan_score', avg_loss_score, iter)
-            writer.add_scalar('loss/source_distr', avg_loss_source_distr, iter)
+            writer.add_scalar('loss/fgan', avg_loss, iter)
             writer.add_scalar('empowerment/min', empowerment_map.min(), iter)
             writer.add_scalar('empowerment/max', empowerment_map.max(), iter)
             writer.add_scalar('entropy/avg', entropy_map.mean(), iter)
             writer.add_scalar('entropy/min', entropy_map.min(), iter)
             writer.add_scalar('entropy/max', entropy_map.max(), iter)
 
-            print('iter {:8d} - loss score/distr {:6.4f}/{:6.4f} - entropy {:6.4f} - {:4.1f}s'.format(
+            print('iter {:8d} - loss fgan {:6.4f} - entropy {:6.4f} - {:4.1f}s'.format(
                 iter,
-                avg_loss_score,
-                avg_loss_source_distr,
+                avg_loss,
                 entropy_map.mean(),
                 timer() - start,
             ))
-            cumul_loss_score = 0
-            cumul_loss_source_distr = 0
+            cumul_loss = 0
             start = timer()
 
         if iter >= max_iter:

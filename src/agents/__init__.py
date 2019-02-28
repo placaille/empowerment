@@ -2,3 +2,4 @@ from .var_info_max import VarInfoDiscreteStaticAgent
 from .mine_repro_distr import MineReproDiscreteStaticAgent
 from .fgan_repro_distr import fGANReproDiscreteStaticAgent
 from .fgan_pol_grad_distr import fGANPolGradDiscreteStaticAgent
+from .fgan_gumbel_distr import fGANGumbelDiscreteStaticAgent
