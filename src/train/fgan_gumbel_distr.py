@@ -32,6 +32,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     'js',
     'kl'
 ]))
+@click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True))
+@click.option('--train-score', default=True, type=bool)
+@click.option('--train-source-distr', default=True, type=bool)
 @click.option('--log-dir', type=click.Path(file_okay=False, exists=True, writable=True), default='./out')
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--hidden-size', type=int, default=32)
@@ -39,20 +42,23 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--emp-alpha', type=float, default=0.001, help='Emp table moving average weight (def. 0.001)')
 @click.option('--entropy-weight', type=float, default=0.1, help='Entropy weight regularization (def. 0.1)')
-@click.option('--gumbel-temp', type=float, default=2.0, help='Temperature for Gumbel-Softax (def. 2.0)')
+@click.option('--gumbel-temp-start', type=float, default=0.5, help='Starting temp for Gumbel-Softax (def. 0.5)')
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--samples-per-train', type=int, default=100)
 @click.option('--batch_size', type=int, default=128)
 def main(**kwargs):
     env_name = kwargs.get('env_name')
     diverg_name = kwargs.get('diverg_name')
+    pre_trained_dir = kwargs.get('pre_trained_dir')
+    train_score = kwargs.get('train_score')
+    train_source_distr = kwargs.get('train_source_distr')
     log_dir = kwargs.get('log_dir')
     num_steps = kwargs.get('num_steps')
     hidden_size = kwargs.get('hidden_size')
     iter_per_eval = kwargs.get('iter_per_eval')
     max_iter = kwargs.get('max_iter')
     emp_alpha = kwargs.get('emp_alpha')
-    gumbel_temp = kwargs.get('gumbel_temp')
+    gumbel_temp_start = kwargs.get('gumbel_temp_start')
     entropy_weight = kwargs.get('entropy_weight')
     memory_size = kwargs.get('memory_size')
     samples_per_train = kwargs.get('samples_per_train')
@@ -67,6 +73,13 @@ def main(**kwargs):
     env = gym.make(env_name)
 
     print('Initializing agent and models..')
+    if pre_trained_dir is not None:
+        path_score = None
+        path_source_distr = None
+        if not train_score:
+            path_score = os.path.join(pre_trained_dir, '{}_score.pth'.format(env_name))
+        if not train_source_distr:
+            path_source_distr = os.path.join(pre_trained_dir, '{}_source_distr.pth'.format(env_name))
     agent = agents.fGANGumbelDiscreteStaticAgent(
         actions=env.actions,
         observation_size=env.observation_space.n,
@@ -77,7 +90,11 @@ def main(**kwargs):
         mem_size=batch_size,
         mem_fields=['obs_start', 'obs_end', 'act_seq', 'seq_soft_onehot'],
         max_batch_size=batch_size,
-        temperature=gumbel_temp,
+        temperature_start=gumbel_temp_start,
+        train_score=train_score,
+        train_source_distr=train_source_distr,
+        path_score=path_score,
+        path_source_distr=path_source_distr,
         device=device,
     )
 
@@ -93,7 +110,7 @@ def main(**kwargs):
         for _ in range(batch_size):
             obs = env.reset()
             prev_obs = obs
-            action_seq = agent.sample_action_sequence(obs)
+            action_seq = agent.sample_source_distr(obs)
             for action in action_seq['actions']:
                 obs = env.step(action)
 
@@ -140,6 +157,7 @@ def main(**kwargs):
                 timer() - start,
             ))
             cumul_loss = 0
+            agent.anneal_temperature(iter)
             start = timer()
 
         if iter >= max_iter:

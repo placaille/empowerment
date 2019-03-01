@@ -15,19 +15,29 @@ import models
 import utils
 
 class fGANGumbelDiscreteStaticAgent(object):
-    def __init__(self, actions, observation_size, hidden_size, emp_num_steps,
-                 alpha, divergence_name, mem_size, mem_fields, max_batch_size,
-                 temperature, device='cpu'):
-        assert type(actions) is dict
-        self.device = device
-        self.alpha = alpha
-        self.temperature = temperature
-        self.divergence_name = divergence_name
-        self.max_batch_size = max_batch_size
+    def __init__(self, **kwargs):
+        assert type(kwargs.get('actions')) is dict
+        self.device = kwargs.get('device')
+        self.alpha = kwargs.get('alpha')
+        self.temperature_start = kwargs.get('temperature_start')
+        self.temperature = self.temperature_start
+        self.divergence_name = kwargs.get('divergence_name')
+        self.max_batch_size = kwargs.get('max_batch_size')
+        self.actions = kwargs.get('actions')
 
-        self.actions = actions
+        observation_size = kwargs.get('observation_size')
+        hidden_size = kwargs.get('hidden_size')
+        path_score = kwargs.get('path_score')
+        path_source_distr = kwargs.get('path_source_distr')
+        train_score = kwargs.get('train_score')
+        train_source_distr = kwargs.get('train_source_distr')
+
+        mem_size = kwargs.get('mem_size')
+        mem_fields = kwargs.get('mem_fields')
+
         actions_id = [str(x) for x in self.actions.values()]
-        self.actions_keys = [''.join(act_seq) for act_seq in product(actions_id, repeat=emp_num_steps)]
+        self.actions_keys = [''.join(act_seq) for act_seq in
+                             product(actions_id, repeat=kwargs.get('emp_num_steps'))]
 
         self.actions_seqs = {}
         self.actions_lists = {}
@@ -38,18 +48,24 @@ class fGANGumbelDiscreteStaticAgent(object):
 
         self.fgan = utils.fGAN(self.divergence_name)
         # model used to compute score (or marginals/joint) (s`+a, conditioned on s)
-        self.model_score = models.MLPBatchNorm(2*observation_size+len(self.actions_seqs), hidden_size, 1)
+        self.model_score = models.MLP(2*observation_size+len(self.actions_seqs), hidden_size, 1)
+        if path_score:
+            self.model_score.load(path_score)
         self.model_score.to(self.device)
 
-        self.model_generator = models.MLP(observation_size, hidden_size, len(self.actions_seqs))
-        self.model_generator.to(self.device)
+        self.model_source_distr = models.MLP(observation_size, hidden_size, len(self.actions_seqs))
+        if path_source_distr:
+            self.model_source_distr.load(path_source_distr)
+        self.model_source_distr.to(self.device)
 
         self.obj = self.fgan.discr_obj
+        params = []
+        if train_score:
+            params += list(self.model_score.parameters())
+        if train_source_distr:
+            params += list(self.model_source_distr.parameters())
 
-        self.optim = optim.SGD(list(self.model_score.parameters()) +
-                               list(self.model_generator.parameters()),
-                               lr=0.001,
-                               momentum=0.9)
+        self.optim = optim.Adam(params)
 
         self.memory = utils.Memory(mem_size, *mem_fields)
         self.seq_onehot = None
@@ -105,7 +121,7 @@ class fGANGumbelDiscreteStaticAgent(object):
     def compute_entropy_map(self, env):
         obs = torch.eye(len(env.free_states))
         with torch.no_grad():
-            log_probs = F.log_softmax(self.model_generator(obs.to(self.device)), dim=-1)
+            log_probs = F.log_softmax(self.model_source_distr(obs.to(self.device)), dim=-1)
             distr = RelaxedOneHotCategorical(self.temperature, logits=log_probs)
             entropy = -(distr.logits * distr.probs).sum(-1).cpu().numpy()
 
@@ -116,9 +132,9 @@ class fGANGumbelDiscreteStaticAgent(object):
         entropy_map[states_i, states_j] = entropy
         return entropy_map
 
-    def sample_action_sequence(self, obs):
+    def sample_source_distr(self, obs):
         obs = torch.FloatTensor(obs)
-        seq_logits = F.log_softmax(self.model_generator(obs.to(self.device)), dim=-1)
+        seq_logits = F.log_softmax(self.model_source_distr(obs.to(self.device)), dim=-1)
         seq_distr = RelaxedOneHotCategorical(self.temperature, logits=seq_logits)
         sample = seq_distr.rsample().cpu()
         out = {
@@ -127,8 +143,12 @@ class fGANGumbelDiscreteStaticAgent(object):
             }
         return out
 
+    def anneal_temperature(self, iter):
+        if iter % 1000 == 0:
+            self.temperature = np.max((0.5, np.exp(-3e-5 * iter)))
+
     def save_models(self, tag, out_dir):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         self.model_score.save(os.path.join(out_dir, tag + 'score.pth'))
-        self.model_generator.save(os.path.join(out_dir, tag + 'generator.pth'))
+        self.model_source_distr.save(os.path.join(out_dir, tag + 'source_distr.pth'))
