@@ -29,8 +29,10 @@ class fGANReproDiscreteStaticAgent(object):
         self.actions_keys = [''.join(act_seq) for act_seq in product(actions_id, repeat=emp_num_steps)]
 
         self.actions_seqs = {}
+        self.actions_lists = {}
         for actions_key in self.actions_keys:
             self.actions_seqs[actions_key] = self.actions_keys.index(actions_key)
+            self.actions_lists[self.actions_keys.index(actions_key)] = [int(act) for act in actions_key]
         self.num_actions_seqs = len(self.actions_seqs)
 
         self.fgan = utils.fGAN(self.divergence_name)
@@ -75,9 +77,10 @@ class fGANReproDiscreteStaticAgent(object):
         logits_joint = self.model_score(stack_joint.to(self.device))
         logits_marginal = self.model_score(stack_marginal.to(self.device))
 
-        net_scores = self.obj_score(logits_joint, logits_marginal)
+        constant, scores_joint, scores_marginal = self.obj_score(logits_joint, logits_marginal)
+        net_scores = constant + scores_joint - scores_marginal
         emp_value = net_scores.data.squeeze()
-        loss_score = -net_scores.mean()
+        loss_score = -(constant.mean() + scores_joint.mean() - scores_marginal.mean())
 
         self.optim_score.zero_grad()
         loss_score.backward()
@@ -104,7 +107,7 @@ class fGANReproDiscreteStaticAgent(object):
         with torch.no_grad():
             seq_logits = self.model_source_distr(obs.to(self.device))
             seq_distr = Categorical(logits=seq_logits)
-        return seq_distr.sample().item()
+        return self.actions_lists[seq_distr.sample().item()]
 
     def save_models(self, tag, out_dir):
         if not os.path.exists(out_dir):

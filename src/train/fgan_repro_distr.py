@@ -91,8 +91,8 @@ def main(**kwargs):
         for _ in range(samples_per_train):
             obs = env.reset()
             prev_obs = obs
-            for _ in range(num_steps):
-                action = env.action_space.sample()
+            actions = agent.sample_source_distr(obs)
+            for action in actions:
                 action_seq.append(action)
                 obs = env.step(action)
 
