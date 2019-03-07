@@ -1,6 +1,4 @@
-#!/usr/bin bash
-# originally taken from
-# https://gist.github.com/taylorpaul/250ee3ed2524e8c28ee7c58ed656a5b9
+#!/bin/bash
 
 usage() {
 »       echo " Usage : $0 [-l <log_dir>] [-f forward-home]"

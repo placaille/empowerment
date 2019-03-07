@@ -25,10 +25,17 @@ python_file=src/train/fgan_gumbel_distr.py  # (will be called from job repositor
 job_dir=$PWD/.jobs
 config_dir=$PWD/.configs
 
+# naming group
+read -t 10 -p "Enter group name, if necessary (10 secs) > " group_name
+if [ ! -z "$group_name" ]; then
+  # if group_name is defined
+  out_dir=$out_dir/$group_name
+fi
+
 # Launch loop
 for config_file in $config_dir/*.conf; do
   config_name=$(basename $config_file)
-  timestamp=$(gdate +%s%3N)
+  timestamp=$(date +%s%3N)
   job_file=$job_dir/${job_name}.job
   job_out_dir=$out_dir/$timestamp
 
@@ -51,14 +58,13 @@ for config_file in $config_dir/*.conf; do
 #SBATCH --job-name=$job_name.job
 #SBATCH --output=$job_out_dir/slurm-%j-%2t.out
 #SBATCH --error=$job_out_dir/slurm-%j-%2t.err
-#SBATCH --nodelist=kepler2
-#SBATCH --exclude=kepler4
-#SBATCH --time=3:00:00
+#SBATCH --time=1:00:00
 #SBATCH --mem=10G
 $other_cmds
 python $job_python_file $python_args" > $job_file
 
-  if sbatch $job_file; then
-    rm $config_file
-  fi
+  sbatch $job_file
+  # if sbatch $job_file; then
+  #   rm $config_file
+  # fi
 done

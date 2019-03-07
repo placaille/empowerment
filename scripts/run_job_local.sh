@@ -24,6 +24,13 @@ python_file=src/train/fgan_gumbel_distr.py  # (will be called from job repositor
 job_dir=$PWD/.jobs
 config_dir=$PWD/.configs
 
+# naming group
+read -t 10 -p "Enter group name, if necessary (10 secs) > " group_name
+if [ ! -z "$group_name" ]; then
+  # if group_name is defined
+  out_dir=$out_dir/$group_name
+fi
+
 # Launch loop
 for config_file in $config_dir/*.conf; do
   config_name=$(basename $config_file)
