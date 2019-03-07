@@ -149,12 +149,11 @@ def main(**kwargs):
                                       tag=tag_ent,
                                       global_step=iter,
                                       file_name=os.path.join(log_dir, 'maps', tag_ent))
-            writer.add_scalar('loss/fgan', avg_loss, iter)
-            writer.add_scalar('empowerment/min', empowerment_map.min(), iter)
-            writer.add_scalar('empowerment/max', empowerment_map.max(), iter)
-            writer.add_scalar('entropy/avg', entropy_map.mean(), iter)
-            writer.add_scalar('entropy/min', entropy_map.min(), iter)
-            writer.add_scalar('entropy/max', entropy_map.max(), iter)
+            writer.add_scalar('loss-{}-{}step/fgan', avg_loss, iter)
+            writer.add_scalar('empowerment-{}-{}step/min'.format(env_name, num_steps), empowerment_map.min(), iter)
+            writer.add_scalar('empowerment-{}-{}step/max'.format(env_name, num_steps), empowerment_map.max(), iter)
+            writer.add_scalar('entropy-{}-{}step/min'.format(env_name, num_steps), entropy_map.min(), iter)
+            writer.add_scalar('entropy-{}-{}step/max'.format(env_name, num_steps), entropy_map.max(), iter)
 
             print('iter {:8d} - loss fgan {:6.4f} - entropy {:6.4f} - {:4.1f}s'.format(
                 iter,
