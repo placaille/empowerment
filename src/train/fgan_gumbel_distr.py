@@ -32,6 +32,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     'js',
     'kl'
 ]))
+@click.option('--comment', type=str, default=None, help='Comment stored in the args')
 @click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True))
 @click.option('--train-score', default=True, type=bool)
 @click.option('--train-source-distr', default=True, type=bool)
@@ -63,7 +64,10 @@ def main(**kwargs):
     memory_size = kwargs.get('memory_size')
     samples_per_train = kwargs.get('samples_per_train')
     batch_size = kwargs.get('batch_size')
-    print(kwargs)
+    print('---')
+    for (k, v) in kwargs.items():
+        print("{}: {}".format(k, v))
+    print('---')
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     with open(os.path.join(log_dir, 'args.info'), 'w') as f:
@@ -101,6 +105,8 @@ def main(**kwargs):
     print('Initializing misc..')
     writer = SummaryWriter(log_dir)
     writer.add_text('args', str(kwargs))
+    for (k, v) in kwargs.items():
+        writer.add_text('{}'.format(k), str(v))
     action_seq = deque(maxlen=num_steps)
     cumul_loss = 0
     start = timer()

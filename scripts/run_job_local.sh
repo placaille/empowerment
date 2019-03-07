@@ -18,7 +18,6 @@ done
 
 # Project specific values
 out_dir=$SCRATCH/projects/augusta/jobs
-other_cmds="source activate augusta"
 python_file=src/train/fgan_gumbel_distr.py  # (will be called from job repository)
 
 # Assume running this from the script directory
@@ -33,7 +32,7 @@ for config_file in $config_dir/*.conf; do
   job_out_dir=$out_dir/$timestamp
 
   # copy current version of code
-  echo Launching job with $config_name..
+  echo Launching job with $config_file..
   mkdir -p $job_out_dir
   mkdir -p $(dirname ${job_file})
   cp -r $PWD/src $job_out_dir
@@ -46,19 +45,5 @@ for config_file in $config_dir/*.conf; do
   # add stuff to the run config
   echo "log-dir: $job_out_dir" >> $job_config_file
 
-  # set sbatch settings
-  echo "#!/bin/bash
-#SBATCH --job-name=$job_name.job
-#SBATCH --output=$job_out_dir/slurm-%j-%2t.out
-#SBATCH --error=$job_out_dir/slurm-%j-%2t.err
-#SBATCH --nodelist=kepler2
-#SBATCH --exclude=kepler4
-#SBATCH --time=3:00:00
-#SBATCH --mem=10G
-$other_cmds
-python $job_python_file $python_args" > $job_file
-
-  if sbatch $job_file; then
-    rm $config_file
-  fi
+  python $job_python_file $python_args
 done
