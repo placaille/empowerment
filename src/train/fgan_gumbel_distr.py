@@ -39,7 +39,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 @click.option('--log-dir', type=click.Path(file_okay=False, exists=True, writable=True), default='./out')
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--hidden-size', type=int, default=32)
-@click.option('--iter-per-eval', type=int, default=1000)
+@click.option('--iter-per-eval', type=int, default=1000, help='Number of training iterations between evaluations')
+@click.option('--iter-per-train', type=int, default=1000, help='Number of samples to generate between training steps')
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--emp-alpha', type=float, default=0.001, help='Emp table moving average weight (def. 0.001)')
 @click.option('--entropy-weight', type=float, default=0.1, help='Entropy weight regularization (def. 0.1)')
@@ -57,6 +58,7 @@ def main(**kwargs):
     num_steps = kwargs.get('num_steps')
     hidden_size = kwargs.get('hidden_size')
     iter_per_eval = kwargs.get('iter_per_eval')
+    iter_per_train = kwargs.get('iter_per_train')
     max_iter = kwargs.get('max_iter')
     emp_alpha = kwargs.get('emp_alpha')
     gumbel_temp_start = kwargs.get('gumbel_temp_start')
@@ -113,20 +115,20 @@ def main(**kwargs):
 
     print('Starting training..')
     for iter in count(start=1):
-        for _ in range(batch_size):
-            obs = env.reset()
+        init_obs = [env.reset() for _ in range(batch_size)]
+        action_seqs = agent.sample_source_distr(init_obs)
+        for (obs, action_seq, soft_onehot) in zip(init_obs, action_seqs['actions'], action_seqs['soft_onehot']):
+            env.reset(state=obs.argmax())
             prev_obs = obs
-            action_seq = agent.sample_source_distr(obs)
-            for action in action_seq['actions']:
+            for action in action_seq:
                 obs = env.step(action)
 
             agent.memory.add_data(
                 obs_start=prev_obs,
                 obs_end=obs,
-                act_seq=action_seq['actions'],
-                seq_soft_onehot=action_seq['soft_onehot'],
+                act_seq=action_seq,
+                seq_soft_onehot=soft_onehot,
             )
-
         loss = agent.train_step()
         cumul_loss += loss
 

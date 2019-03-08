@@ -136,10 +136,10 @@ class fGANGumbelDiscreteStaticAgent(object):
         obs = torch.FloatTensor(obs)
         seq_logits = F.log_softmax(self.model_source_distr(obs.to(self.device)), dim=-1)
         seq_distr = RelaxedOneHotCategorical(self.temperature, logits=seq_logits)
-        sample = seq_distr.rsample().cpu()
+        sample = seq_distr.rsample()
         out = {
             'soft_onehot': sample,
-            'actions': self.actions_lists[sample.argmax().item()],
+            'actions': [self.actions_lists[act.item()] for act in sample.argmax(dim=-1)],
             }
         return out
 
