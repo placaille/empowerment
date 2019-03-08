@@ -34,12 +34,12 @@ fi
 # Launch loop
 for config_file in $config_dir/*.conf; do
   config_name=$(basename $config_file)
-  timestamp=$(gdate +%s%3N)
+  timestamp=$(gdate +%s%3N) || timestamp=$(date +%s%3N)
   job_file=$job_dir/${job_name}.job
   job_out_dir=$out_dir/$timestamp
 
   # copy current version of code
-  echo Launching job with $config_file..
+  echo Launching job with $config_name..
   mkdir -p $job_out_dir
   mkdir -p $(dirname ${job_file})
   cp -r $PWD/src $job_out_dir
