@@ -19,8 +19,6 @@ import custom_envs
 import agents
 import utils
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 @click.command(cls=utils.CommandWithConfigFile('config_file'))
 @click.option('--config-file', '-c', type=click.Path(exists=True, dir_okay=False))
 @click.option('--env-name', default='TwoRoom-v0', type=click.Choice([
@@ -34,6 +32,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ]))
 @click.option('--comment', type=str, default=None, help='Comment stored in the args')
 @click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True))
+@click.option('--force-cpu', default=False, type=bool)
 @click.option('--train-score', default=True, type=bool)
 @click.option('--train-source-distr', default=True, type=bool)
 @click.option('--log-dir', type=click.Path(file_okay=False, exists=True, writable=True), default='./out')
@@ -51,6 +50,7 @@ def main(**kwargs):
     env_name = kwargs.get('env_name')
     diverg_name = kwargs.get('diverg_name')
     pre_trained_dir = kwargs.get('pre_trained_dir')
+    force_cpu = kwargs.get('force_cpu')
     train_score = kwargs.get('train_score')
     train_source_distr = kwargs.get('train_source_distr')
     log_dir = kwargs.get('log_dir')
@@ -72,6 +72,11 @@ def main(**kwargs):
         os.makedirs(log_dir)
     with open(os.path.join(log_dir, 'args.info'), 'w') as f:
         f.write(str(kwargs))
+
+    if force_cpu:
+        device = torch.device('cpu')
+    else:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     print('Initializing env..')
     env = gym.make(env_name)
