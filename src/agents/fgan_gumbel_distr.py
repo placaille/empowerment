@@ -31,6 +31,9 @@ class fGANGumbelDiscreteStaticAgent(object):
         path_source_distr = kwargs.get('path_source_distr')
         train_score = kwargs.get('train_score')
         train_source_distr = kwargs.get('train_source_distr')
+        optim_name = kwargs.get('optim_name')
+        learning_rate = kwargs.get('learning_rate')
+        momentum = kwargs.get('momentum')
 
         mem_size = kwargs.get('mem_size')
         mem_fields = kwargs.get('mem_fields')
@@ -65,7 +68,12 @@ class fGANGumbelDiscreteStaticAgent(object):
         if train_source_distr:
             params += list(self.model_source_distr.parameters())
 
-        self.optim = optim.Adam(params)
+        if optim_name == 'adam':
+            self.optim = optim.Adam(params, lr=learning_rate)
+        elif optim_name == 'sgd':
+            self.optim = optim.SGD(params, lr=learning_rate, momentum=momentum, nesterov=True)
+        elif optim_name == 'rmsprop':
+            self.optim = optim.RMSprop(params, lr=learning_rate, momentum=momentum)
 
         self.memory = utils.Memory(mem_size, *mem_fields)
         self.seq_onehot = None

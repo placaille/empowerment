@@ -30,6 +30,13 @@ import utils
     'js',
     'kl'
 ]))
+@click.option('--optim-name', default='adam', type=click.Choice([
+    'adam',
+    'sgd',
+    'rmsprop',
+]))
+@click.option('--learning-rate', default=0.0001, type=float)
+@click.option('--momentum', default=0.0, type=float)
 @click.option('--comment', type=str, default=None, help='Comment stored in the args')
 @click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True))
 @click.option('--force-cpu', default=False, type=bool)
@@ -49,6 +56,9 @@ import utils
 def main(**kwargs):
     env_name = kwargs.get('env_name')
     diverg_name = kwargs.get('diverg_name')
+    optim_name = kwargs.get('optim_name')
+    learning_rate = kwargs.get('learning_rate')
+    momentum = kwargs.get('momentum')
     pre_trained_dir = kwargs.get('pre_trained_dir')
     force_cpu = kwargs.get('force_cpu')
     train_score = kwargs.get('train_score')
@@ -104,6 +114,9 @@ def main(**kwargs):
         train_source_distr=train_source_distr,
         path_score=path_score,
         path_source_distr=path_source_distr,
+        optim_name=optim_name,
+        learning_rate=learning_rate,
+        momentum=momentum,
         device=device,
     )
 
