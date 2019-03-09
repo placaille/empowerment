@@ -7,9 +7,9 @@ def main():
     max_iter=150000
     iter_per_eval=1000
     force_cpu='true'
-    train_score='true'
-    train_source_distr='false'
-    pre_trained_dir='./models/fgan/repro/2_steps/js'
+    train_score='false'
+    train_source_distr='true'
+    pre_trained_dir='projects/augusta/pre_trained_models/models/fgan/repro/2_steps/js'
     diverg_name='js'
     comment='hp search for training generator on optim and gumbel temp'
 

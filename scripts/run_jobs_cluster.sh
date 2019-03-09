@@ -55,12 +55,12 @@ for config_file in $config_dir/*.conf; do
 
   # set sbatch settings
   echo "#!/bin/bash
-#SBATCH --job-name=$job_name.job
-#SBATCH --output=$job_out_dir/slurm-%j-%2t.out
-#SBATCH --error=$job_out_dir/slurm-%j-%2t.err
+#SBATCH --job-name=$config_name.job
+#SBATCH --output=$job_out_dir/slurm-%j.out
+#SBATCH --error=$job_out_dir/slurm-%j.err
 #SBATCH --time=2:00:00
 #SBATCH --mem=4G
-#SBATCH --cpus-per-task=1
+#SBATCH -c 1
 #SBATCH --qos=low
 $other_cmds
 python $job_python_file $python_args" > $job_file
@@ -69,4 +69,5 @@ python $job_python_file $python_args" > $job_file
   if sbatch $job_file; then
     rm $config_file
   fi
+  sleep 1
 done
