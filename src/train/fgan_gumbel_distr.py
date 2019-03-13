@@ -53,6 +53,7 @@ import utils
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--samples-per-train', type=int, default=100)
 @click.option('--batch_size', type=int, default=128)
+@click.option('--tensorboard-dir', default=None)
 def main(**kwargs):
     env_name = kwargs.get('env_name')
     diverg_name = kwargs.get('diverg_name')
@@ -74,6 +75,10 @@ def main(**kwargs):
     memory_size = kwargs.get('memory_size')
     samples_per_train = kwargs.get('samples_per_train')
     batch_size = kwargs.get('batch_size')
+    tensorboard_dir = kwargs.get('tensorboard_dir')
+
+    if tensorboard_dir is None:
+        tensorboard_dir = log_dir
     print('---')
     for (k, v) in kwargs.items():
         print("{}: {}".format(k, v))
@@ -121,7 +126,7 @@ def main(**kwargs):
     )
 
     print('Initializing misc..')
-    writer = SummaryWriter(log_dir)
+    writer = SummaryWriter(tensorboard_dir)
     writer.add_text('args', str(kwargs))
     for (k, v) in kwargs.items():
         writer.add_text('{}'.format(k), str(v))
