@@ -21,7 +21,7 @@ import utils
 
 @click.command(cls=utils.CommandWithConfigFile('config_file'))
 @click.option('--config-file', '-c', type=click.Path(exists=True, dir_okay=False))
-@click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True))
+@click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True), default='./models')
 @click.option('--log-dir', type=click.Path(file_okay=False, exists=True, writable=True), default='./out')
 @click.option('--tensorboard-dir', default=None)
 @click.option('--env-name', default='TwoRoom-v0', type=click.Choice([

@@ -2,6 +2,7 @@ import os
 import random
 import math
 import itertools
+import argparse
 
 def linear_scale_float_sampling(min, max):
     return random.uniform(min, max)
@@ -29,7 +30,7 @@ def hybrid_float_sampling(categorical_value, float_prob, min, max, base=10):
     else:
         return categorical_value
 
-def main():
+def main(args):
     env_name='CrossRoom-v0'
     num_steps=2
     max_iter=150000
@@ -47,10 +48,12 @@ def main():
     momentum_fn = lambda: hybrid_float_sampling(categorical_value=0.0, float_prob=0.7, min=0.0001, max=0.9, base=10)
     optim_name_fn = lambda: categorical_sampling(['sgd', 'adam', 'rmsprop'])
 
-    num_configs = 50
+    num_configs = args.num_configs
+    config_id_start = args.config_id_start
 
-    config_id = 1
-    while config_id <= num_configs:
+    config_id_max = config_id_start + num_configs - 1
+    config_id = config_id_start
+    while config_id <= config_id_max:
 
         file_name = os.path.join('./.configs', '{0:03d}.conf'.format(config_id))
         with open(file_name, 'w') as f:
@@ -84,4 +87,10 @@ def main():
         config_id += 1
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-n', dest='num_configs', type=int, default=1)
+    parser.add_argument('-s', dest='config_id_start', type=int, default=1)
+
+    args = parser.parse_args()
+
+    main(args)

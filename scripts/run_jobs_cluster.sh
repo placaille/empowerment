@@ -56,12 +56,13 @@ for config_file in $config_dir/*.conf; do
   # other cmds to add to .job
   other_cmds="
 # check if job already exists, if so, delete and relaunch (terminated job)
-slurm_files=($job_out_dir/slurm*)
-if [ -e \${slurm_files[0]} ]; then
-  echo job relaunched, deleting previous results..
-  rm -r $job_out_dir/out/*
-  rm -r $job_tensorboard_dir/*
-fi
+# slurm_files=($job_out_dir/slurm*)
+# if [ -e \${slurm_files[0]} ]; then
+#   echo job relaunched, deleting previous results..
+#   echo \${slurm_files[0]}
+#   rm -r $job_out_dir/out/*
+#   rm -r $job_tensorboard_dir/*
+# fi
 
 mkdir -p $job_tmp_dir
 cp -r $job_out_dir/src $job_tmp_dir
@@ -82,6 +83,7 @@ source activate augusta
 #SBATCH -c 1
 #SBATCH --qos=low
 #SBATCH --requeue
+#SBATCH --exclude=leto52,leto20,leto12
 $other_cmds
 python -u $job_python_file $python_args" > $job_file
 
