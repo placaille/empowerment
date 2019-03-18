@@ -111,7 +111,7 @@ def main(**kwargs):
         emp_num_steps=num_steps,
         alpha=emp_alpha,
         divergence_name=diverg_name,
-        mem_size=batch_size,
+        mem_size=2*batch_size,
         mem_fields=['obs_start', 'obs_end', 'act_seq', 'seq_soft_onehot'],
         max_batch_size=batch_size,
         temperature_start=gumbel_temp_start,
@@ -131,12 +131,14 @@ def main(**kwargs):
     for (k, v) in kwargs.items():
         writer.add_text('{}'.format(k), str(v))
     action_seq = deque(maxlen=num_steps)
-    cumul_loss = 0
+    cumul_loss_total = 0
+    cumul_loss_joint = 0
+    cumul_loss_marginal = 0
     start = timer()
 
     print('Starting training..')
     for iter in count(start=1):
-        init_obs = [env.reset() for _ in range(batch_size)]
+        init_obs = [env.reset() for _ in range(2*batch_size)]
         action_seqs = agent.sample_source_distr(init_obs)
         for (obs, action_seq, soft_onehot) in zip(init_obs, action_seqs['actions'], action_seqs['soft_onehot']):
             env.reset(state=obs.argmax())
@@ -150,11 +152,15 @@ def main(**kwargs):
                 act_seq=action_seq,
                 seq_soft_onehot=soft_onehot,
             )
-        loss = agent.train_step()
-        cumul_loss += loss
+        losses = agent.train_step()
+        cumul_loss_total += losses['loss_total']
+        cumul_loss_joint += losses['loss_joint']
+        cumul_loss_marginal += losses['loss_marginal']
 
         if iter % iter_per_eval == 0 or iter == max_iter:
-            avg_loss = cumul_loss / iter_per_eval
+            avg_loss_total = cumul_loss_total / iter_per_eval
+            avg_loss_joint = cumul_loss_joint / iter_per_eval
+            avg_loss_marginal = cumul_loss_marginal / iter_per_eval
 
             empowerment_map = agent.compute_empowerment_map(env)
             entropy_map = agent.compute_entropy_map(env)
@@ -172,7 +178,9 @@ def main(**kwargs):
                                       tag=tag_ent,
                                       global_step=iter,
                                       file_name=os.path.join(log_dir, 'maps', tag_ent))
-            writer.add_scalar('loss-{}-{}step/fgan'.format(env_name, num_steps), avg_loss, iter)
+            writer.add_scalar('loss-{}-{}step/total'.format(env_name, num_steps), avg_loss_total, iter)
+            writer.add_scalar('loss-{}-{}step/joint'.format(env_name, num_steps), avg_loss_joint, iter)
+            writer.add_scalar('loss-{}-{}step/marginal'.format(env_name, num_steps), avg_loss_marginal, iter)
             writer.add_scalar('empowerment-{}-{}step/min'.format(env_name, num_steps), empowerment_map.min(), iter)
             writer.add_scalar('empowerment-{}-{}step/max'.format(env_name, num_steps), empowerment_map.max(), iter)
             writer.add_scalar('entropy-{}-{}step/min'.format(env_name, num_steps), entropy_map.min(), iter)
@@ -180,11 +188,13 @@ def main(**kwargs):
 
             print('iter {:8d} - loss fgan {:6.4f} - entropy {:6.4f} - {:4.1f}s'.format(
                 iter,
-                avg_loss,
+                avg_loss_total,
                 entropy_map.mean(),
                 timer() - start,
             ))
-            cumul_loss = 0
+            cumul_loss_total = 0
+            cumul_loss_joint = 0
+            cumul_loss_marginal = 0
             agent.anneal_temperature(iter)
             start = timer()
 

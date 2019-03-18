@@ -61,7 +61,10 @@ class fGANGumbelDiscreteStaticAgent(object):
             self.model_source_distr.load(path_source_distr)
         self.model_source_distr.to(self.device)
 
-        self.obj = self.fgan.discr_obj
+        self.obj = self.fgan.discr_obj  # returns averything to compute empowerment
+        self.pos_obj = self.fgan.positive_obj  # only positive score from fgan (to maximize)
+        self.neg_obj = self.fgan.negative_obj  # only negative score from fgan (to maximize)
+
         params = []
         if train_score:
             params += list(self.model_score.parameters())
@@ -88,35 +91,40 @@ class fGANGumbelDiscreteStaticAgent(object):
         return self.seq_onehot
 
     def train_step(self):
-        batch = self.memory.sample_data(self.max_batch_size)
+        batch = self.memory.sample_data(self.max_batch_size * 2)
 
-        obs_start = torch.FloatTensor(batch.obs_start).to(self.device)
-        obs_end = torch.FloatTensor(batch.obs_end).to(self.device)
-        seq_soft_onehot = torch.stack(batch.seq_soft_onehot).to(self.device)
-        seq_soft_onehot_shfl = seq_soft_onehot[torch.randperm(seq_soft_onehot.shape[0])]
+        split_half_id = len(batch.obs_start) // 2
 
-        stack_joint = torch.cat([obs_start, obs_end, seq_soft_onehot], dim=1)
-        stack_marginal = torch.cat([obs_start, obs_end, seq_soft_onehot_shfl], dim=1)
+        obs_start_pos = torch.FloatTensor(batch.obs_start[:split_half_id]).to(self.device)
+        obs_end_pos = torch.FloatTensor(batch.obs_end[:split_half_id]).to(self.device)
+        seq_soft_onehot_pos = torch.stack(batch.seq_soft_onehot[:split_half_id]).to(self.device)
+
+        obs_start_neg = torch.FloatTensor(batch.obs_start[split_half_id:]).to(self.device)
+        obs_end_neg = torch.FloatTensor(batch.obs_end[split_half_id:]).to(self.device)
+        seq_soft_onehot_neg = torch.stack(batch.seq_soft_onehot[split_half_id:]).to(self.device)
+        seq_soft_onehot_neg = seq_soft_onehot_neg[torch.randperm(seq_soft_onehot_neg.shape[0])]
+
+        stack_joint = torch.cat([obs_start_pos, obs_end_pos, seq_soft_onehot_pos], dim=1)
+        stack_marginal = torch.cat([obs_start_neg, obs_end_neg, seq_soft_onehot_neg], dim=1)
 
         logits_joint = self.model_score(stack_joint.to(self.device))
         logits_marginal = self.model_score(stack_marginal.to(self.device))
 
-        constant, scores_joint, scores_marginal = self.obj(logits_joint, logits_marginal)
-        scores_net = constant + scores_joint - scores_marginal
-        emp_value = scores_net.data
-        loss = - (constant.mean() + scores_joint.mean() - scores_marginal.mean())
+        loss_joint = -self.pos_obj(logits_joint)
+        loss_marginal = -self.neg_obj(logits_marginal)
+
+        loss_total = loss_joint + loss_marginal
 
         self.optim.zero_grad()
-        loss.backward()
+        loss_total.backward()
         self.optim.step()
 
-        self._update_emp_values(obs_start, emp_value)
-        return loss.item()
-
-    def _update_emp_values(self, obs_start, empowerment_value):
-        states = obs_start.argmax(dim=1)
-        for (state, emp) in zip(states, empowerment_value):
-            self.empowerment_states[state] += self.alpha * (emp - self.empowerment_states[state])
+        out = {
+            'loss_total': loss_total.item(),
+            'loss_joint': loss_joint.item(),
+            'loss_marginal': loss_marginal.item(),
+        }
+        return out
 
     def compute_empowerment_map(self, env, num_sample=1000):
         empowerment_states = utils.get_empowerment_values(

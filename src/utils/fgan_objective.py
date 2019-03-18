@@ -26,10 +26,16 @@ class fGAN:
             self.pos_score = lambda logits: F.logsigmoid(logits)
             self.neg_score = lambda logits: -(F.logsigmoid(logits) - logits)
 
-    def discr_obj(self, pos_logits, neg_logits, mean=False):
+    def discr_obj(self, pos_logits, neg_logits):
         """
         objective (to maximize) for the discriminator
         *** RETURNS ALL ELEMENTS IN TENSORS (NOT THE MEAN)
         """
         constant = torch.tensor(self.constant).float().expand(pos_logits.shape[0], 1)
         return constant.to(pos_logits.device), self.pos_score(pos_logits), self.neg_score(neg_logits)
+
+    def positive_obj(self, logits):
+        return self.pos_score(logits).mean()
+
+    def negative_obj(self, logits):
+        return - self.neg_score(logits).mean()
