@@ -118,7 +118,12 @@ class fGANGumbelDiscreteStaticAgent(object):
         for (state, emp) in zip(states, empowerment_value):
             self.empowerment_states[state] += self.alpha * (emp - self.empowerment_states[state])
 
-    def compute_empowerment_map(self, env):
+    def compute_empowerment_map(self, env, num_sample=1000):
+        empowerment_states = utils.get_empowerment_values(
+            agent=self,
+            env=env,
+            num_sample=num_sample,
+        )
         states_i, states_j = zip(*env.free_pos)
 
         # init map value to avg empowerment to simplify color mapping later

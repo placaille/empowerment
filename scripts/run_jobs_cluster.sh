@@ -8,7 +8,7 @@ LOCAL=false
 FORCE_OVERWRITE=false
 while getopts g:h flag; do
   case $flag in
-    g) ARG_GROUP_NAME=$OPTARG ;;
+    g) group_name=$OPTARG ;;
     h) usage; exit;;
     *) usage; exit;;
     ?) usage; exit;;
@@ -18,19 +18,12 @@ done
 # Project specific values
 out_dir=$SCRATCH/projects/augusta/jobs
 tensorboard_dir=$SCRATCH/projects/augusta/tensorboard
-other_cmds="source activate augusta"
 python_file=src/train/fgan_gumbel_distr.py  # (will be called from job repository)
 
 # Assume running this from the script directory
 job_dir=$PWD/.jobs
 config_dir=$PWD/.configs
 
-# naming group
-if [ -z "$ARG_GROUP_NAME" ]; then
-  read -t 10 -p "Enter group name, if necessary (10 secs) > " group_name
-else
-  group_name=$ARG_GROUP_NAME
-fi
 if [ ! -z "$group_name" ]; then
   # if group_name is defined
   out_dir=$out_dir/$group_name
@@ -41,23 +34,42 @@ fi
 for config_file in $config_dir/*.conf; do
   config_name=$(basename $config_file)
   timestamp=$(date +%s%3N)
-  job_file=$job_dir/${job_name}.job
-  job_out_dir=$out_dir/$timestamp
-  job_tensorboard_dir=$tensorboard_dir/$timestamp
+  config_id="${config_name%.*}"
+  unique_id=${config_id}-${timestamp}
+
+  job_file=$job_dir/${unique_id}.job
+  job_out_dir=$out_dir/$unique_id
+  job_tensorboard_dir=$tensorboard_dir/$unique_id
+  job_tmp_dir=\$TMPDIR/$unique_id
 
   # copy current version of code
-  echo Launching job $group_name/${config_name}..
-  mkdir -p $job_out_dir
+  echo Launching job $group_name/${unique_id}..
+  mkdir -p $job_out_dir/out
   mkdir -p $(dirname ${job_file})
   cp -r $PWD/src $job_out_dir
   cp $config_file $job_out_dir
 
-  job_python_file=$job_out_dir/$python_file
+  job_python_file=$job_tmp_dir/$python_file
   job_config_file=$job_out_dir/${config_name}
   python_args="-c $job_config_file"
 
+  # other cmds to add to .job
+  other_cmds="
+# check if job already exists, if so, delete and relaunch (terminated job)
+slurm_files=($job_out_dir/slurm*)
+if [ -e \${slurm_files[0]} ]; then
+  echo job relaunched, deleting previous results..
+  rm -r $job_out_dir/out/*
+  rm -r $job_tensorboard_dir/*
+fi
+
+mkdir -p $job_tmp_dir
+cp -r $job_out_dir/src $job_tmp_dir
+source activate augusta
+"
+
   # add stuff to the run config
-  echo "log-dir: $job_out_dir" >> $job_config_file
+  echo "log-dir: $job_out_dir/out" >> $job_config_file
   echo "tensorboard-dir: $job_tensorboard_dir" >> $job_config_file
 
   # set sbatch settings
@@ -69,11 +81,13 @@ for config_file in $config_dir/*.conf; do
 #SBATCH --mem=4G
 #SBATCH -c 1
 #SBATCH --qos=low
+#SBATCH --requeue
 $other_cmds
 python -u $job_python_file $python_args" > $job_file
 
   # sbatch $job_file
   if sbatch $job_file; then
+    cp $job_file $job_out_dir
     rm $config_file
   fi
   sleep 1

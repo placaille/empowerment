@@ -21,6 +21,9 @@ import utils
 
 @click.command(cls=utils.CommandWithConfigFile('config_file'))
 @click.option('--config-file', '-c', type=click.Path(exists=True, dir_okay=False))
+@click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True))
+@click.option('--log-dir', type=click.Path(file_okay=False, exists=True, writable=True), default='./out')
+@click.option('--tensorboard-dir', default=None)
 @click.option('--env-name', default='TwoRoom-v0', type=click.Choice([
     'TwoRoom-v0',
     'CrossRoom-v0',
@@ -38,11 +41,9 @@ import utils
 @click.option('--learning-rate', default=0.0001, type=float)
 @click.option('--momentum', default=0.0, type=float)
 @click.option('--comment', type=str, default=None, help='Comment stored in the args')
-@click.option('--pre-trained-dir', type=click.Path(file_okay=False, exists=True, readable=True))
 @click.option('--force-cpu', default=False, type=bool)
 @click.option('--train-score', default=True, type=bool)
 @click.option('--train-source-distr', default=True, type=bool)
-@click.option('--log-dir', type=click.Path(file_okay=False, exists=True, writable=True), default='./out')
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--hidden-size', type=int, default=32)
 @click.option('--iter-per-eval', type=int, default=1000, help='Number of training iterations between evaluations')
@@ -53,18 +54,18 @@ import utils
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--samples-per-train', type=int, default=100)
 @click.option('--batch_size', type=int, default=128)
-@click.option('--tensorboard-dir', default=None)
 def main(**kwargs):
+    pre_trained_dir = os.path.expanduser(kwargs.get('pre_trained_dir'))
+    log_dir = os.path.expanduser(kwargs.get('log_dir'))
+    tensorboard_dir = os.path.expanduser(kwargs.get('tensorboard_dir'))
     env_name = kwargs.get('env_name')
     diverg_name = kwargs.get('diverg_name')
     optim_name = kwargs.get('optim_name')
     learning_rate = kwargs.get('learning_rate')
     momentum = kwargs.get('momentum')
-    pre_trained_dir = kwargs.get('pre_trained_dir')
     force_cpu = kwargs.get('force_cpu')
     train_score = kwargs.get('train_score')
     train_source_distr = kwargs.get('train_source_distr')
-    log_dir = kwargs.get('log_dir')
     num_steps = kwargs.get('num_steps')
     hidden_size = kwargs.get('hidden_size')
     iter_per_eval = kwargs.get('iter_per_eval')
@@ -75,7 +76,6 @@ def main(**kwargs):
     memory_size = kwargs.get('memory_size')
     samples_per_train = kwargs.get('samples_per_train')
     batch_size = kwargs.get('batch_size')
-    tensorboard_dir = kwargs.get('tensorboard_dir')
 
     if tensorboard_dir is None:
         tensorboard_dir = log_dir

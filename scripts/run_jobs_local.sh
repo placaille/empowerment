@@ -8,7 +8,7 @@ LOCAL=false
 FORCE_OVERWRITE=false
 while getopts g:h flag; do
   case $flag in
-    g) ARG_GROUP_NAME=$OPTARG ;;
+    g) group_name=$OPTARG ;;
     h) usage; exit;;
     *) usage; exit;;
     ?) usage; exit;;
@@ -24,12 +24,6 @@ python_file=src/train/fgan_gumbel_distr.py  # (will be called from job repositor
 job_dir=$PWD/.jobs
 config_dir=$PWD/.configs
 
-# naming group
-if [ -z "$ARG_GROUP_NAME" ]; then
-  read -t 10 -p "Enter group name, if necessary (10 secs) > " group_name
-else
-  group_name=$ARG_GROUP_NAME
-fi
 if [ ! -z "$group_name" ]; then
   # if group_name is defined
   out_dir=$out_dir/$group_name
