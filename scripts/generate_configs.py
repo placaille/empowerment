@@ -38,7 +38,7 @@ def main(args):
     force_cpu='true'
     train_score='false'
     train_source_distr='true'
-    pre_trained_dir='/network/tmp1/lacaillp/projects/augusta/pre_trained_models/fgan/repro/2_steps/js'
+    pre_trained_dir='~/Scratch/projects/augusta/pre_trained_models/fgan/repro/2_steps/js'
     diverg_name='js'
     comment='hp search for training generator on optim and gumbel temp'
 
@@ -55,7 +55,7 @@ def main(args):
     config_id = config_id_start
     while config_id <= config_id_max:
 
-        file_name = os.path.join('./.configs', '{0:03d}.conf'.format(config_id))
+        file_name = os.path.join('./configs', '{0:03d}.conf'.format(config_id))
         with open(file_name, 'w') as f:
             f.write('env-name: {}\n'.format(env_name))
             f.write('num-steps: {}\n'.format(num_steps))

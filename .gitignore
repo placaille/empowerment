@@ -1,6 +1,4 @@
 *__pycache__
-runs/
-./models/
 out/
-.jobs/
-.configs/
+jobs/
+configs/

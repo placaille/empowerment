@@ -18,11 +18,11 @@ done
 # Project specific values
 out_dir=$SCRATCH/projects/augusta/jobs
 tensorboard_dir=$SCRATCH/projects/augusta/tensorboard
-python_file=src/train/fgan_gumbel_distr.py  # (will be called from job repository)
+python_file=src/train/fgan_gumbel.py  # (will be called from job repository)
 
 # Assume running this from the script directory
-job_dir=$PWD/.jobs
-config_dir=$PWD/.configs
+job_dir=$PWD/jobs
+config_dir=$PWD/configs
 
 if [ ! -z "$group_name" ]; then
   # if group_name is defined

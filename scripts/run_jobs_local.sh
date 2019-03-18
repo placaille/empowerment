@@ -18,11 +18,11 @@ done
 # Project specific values
 out_dir=$SCRATCH/projects/augusta/jobs
 tensorboard_dir=$SCRATCH/projects/augusta/tensorboard
-python_file=src/train/fgan_gumbel_distr.py  # (will be called from job repository)
+python_file=src/train/fgan_gumbel.py  # (will be called from job repository)
 
 # Assume running this from the script directory
-job_dir=$PWD/.jobs
-config_dir=$PWD/.configs
+job_dir=$PWD/jobs
+config_dir=$PWD/configs
 
 if [ ! -z "$group_name" ]; then
   # if group_name is defined
@@ -34,9 +34,12 @@ fi
 for config_file in $config_dir/*.conf; do
   config_name=$(basename $config_file)
   timestamp=$(gdate +%s%3N) || timestamp=$(date +%s%3N)
-  job_file=$job_dir/${job_name}.job
-  job_out_dir=$out_dir/$timestamp
-  job_tensorboard_dir=$tensorboard_dir/$timestamp
+  config_id="${config_name%.*}"
+  unique_id=${config_id}-${timestamp}
+
+  job_file=$job_dir/${unique_id}.job
+  job_out_dir=$out_dir/$unique_id
+  job_tensorboard_dir=$tensorboard_dir/$unique_id
 
   # copy current version of code
   echo Launching job $group_name/${config_name}..
