@@ -135,8 +135,8 @@ class fGANGumbelDiscreteStaticAgent(object):
         states_i, states_j = zip(*env.free_pos)
 
         # init map value to avg empowerment to simplify color mapping later
-        empowerment_map = np.full(env.grid.shape, self.empowerment_states.mean(), dtype=np.float32)
-        empowerment_map[states_i, states_j] = self.empowerment_states
+        empowerment_map = np.full(env.grid.shape, empowerment_states.mean(), dtype=np.float32)
+        empowerment_map[states_i, states_j] = empowerment_states
         return empowerment_map
 
     def compute_entropy_map(self, env):
