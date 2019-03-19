@@ -62,8 +62,6 @@ class fGANGumbelDiscreteStaticAgent(object):
         self.model_source_distr.to(self.device)
 
         self.obj = self.fgan.discr_obj  # returns averything to compute empowerment
-        self.pos_obj = self.fgan.positive_obj  # only positive score from fgan (to maximize)
-        self.neg_obj = self.fgan.negative_obj  # only negative score from fgan (to maximize)
 
         params = []
         if train_score:
@@ -110,8 +108,8 @@ class fGANGumbelDiscreteStaticAgent(object):
         logits_joint = self.model_score(stack_joint.to(self.device))
         logits_marginal = self.model_score(stack_marginal.to(self.device))
 
-        loss_joint = -self.pos_obj(logits_joint)
-        loss_marginal = -self.neg_obj(logits_marginal)
+        loss_joint = - self.fgan.pos_score(logits_joint).mean()
+        loss_marginal = - self.fgan.neg_score(logits_marginal).mean()
 
         loss_total = loss_joint + loss_marginal
 
@@ -137,30 +135,30 @@ class fGANGumbelDiscreteStaticAgent(object):
         # init map value to avg empowerment to simplify color mapping later
         empowerment_map = np.full(env.grid.shape, empowerment_states.mean(), dtype=np.float32)
         empowerment_map[states_i, states_j] = empowerment_states
-        return empowerment_map
+        return empowerment_map, empowerment_states.mean()
 
     def compute_entropy_map(self, env):
         obs = torch.eye(len(env.free_states))
         with torch.no_grad():
             log_probs = F.log_softmax(self.model_source_distr(obs.to(self.device)), dim=-1)
-            distr = RelaxedOneHotCategorical(self.temperature, logits=log_probs)
-            entropy = -(distr.logits * distr.probs).sum(-1).cpu().numpy()
+            distr = Categorical(logits=log_probs)
+            entropy = distr.entropy().cpu().numpy()
 
         states_i, states_j = zip(*env.free_pos)
 
         # init map value to avg entropy to simplify color mapping later
         entropy_map = np.full(env.grid.shape, entropy.mean(), dtype=np.float32)
         entropy_map[states_i, states_j] = entropy
-        return entropy_map
+        return entropy_map, entropy.mean()
 
     def sample_source_distr(self, obs):
         obs = torch.FloatTensor(obs)
         seq_logits = F.log_softmax(self.model_source_distr(obs.to(self.device)), dim=-1)
-        seq_distr = RelaxedOneHotCategorical(self.temperature, logits=seq_logits)
-        sample = seq_distr.rsample()
+        relaxed_distr = RelaxedOneHotCategorical(self.temperature, logits=seq_logits)
+        soft_onehot = relaxed_distr.rsample()
         out = {
-            'soft_onehot': sample,
-            'actions': [self.actions_lists[act.item()] for act in sample.argmax(dim=-1)],
+            'soft_onehot': soft_onehot,
+            'actions': [self.actions_lists[act.item()] for act in soft_onehot.argmax(dim=-1)],
             }
         return out
 

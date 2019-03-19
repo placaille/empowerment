@@ -162,11 +162,12 @@ def main(**kwargs):
             avg_loss_joint = cumul_loss_joint / iter_per_eval
             avg_loss_marginal = cumul_loss_marginal / iter_per_eval
 
-            empowerment_map = agent.compute_empowerment_map(env)
-            entropy_map = agent.compute_entropy_map(env)
+            empowerment_map, emp_mean = agent.compute_empowerment_map(env)
+            entropy_map, entr_mean = agent.compute_entropy_map(env)
 
-            tag_emp='emp_{}_steps_{}'.format(num_steps, env_name)
-            tag_ent='entropy_{}_steps_{}'.format(num_steps, env_name)
+            env_step_tag = '{}-{}-steps'.format(env_name, num_steps)
+            tag_emp = 'emp_{}'.format(env_step_tag)
+            tag_ent = 'entropy_{}'.format(env_step_tag)
             agent.save_models(tag=tag_emp+'_', out_dir=os.path.join(log_dir, 'models'))
             utils.log_value_map(writer, empowerment_map,
                                       mask=env.grid != env.free,
@@ -178,18 +179,21 @@ def main(**kwargs):
                                       tag=tag_ent,
                                       global_step=iter,
                                       file_name=os.path.join(log_dir, 'maps', tag_ent))
-            writer.add_scalar('loss-{}-{}step/total'.format(env_name, num_steps), avg_loss_total, iter)
-            writer.add_scalar('loss-{}-{}step/joint'.format(env_name, num_steps), avg_loss_joint, iter)
-            writer.add_scalar('loss-{}-{}step/marginal'.format(env_name, num_steps), avg_loss_marginal, iter)
-            writer.add_scalar('empowerment-{}-{}step/min'.format(env_name, num_steps), empowerment_map.min(), iter)
-            writer.add_scalar('empowerment-{}-{}step/max'.format(env_name, num_steps), empowerment_map.max(), iter)
-            writer.add_scalar('entropy-{}-{}step/min'.format(env_name, num_steps), entropy_map.min(), iter)
-            writer.add_scalar('entropy-{}-{}step/max'.format(env_name, num_steps), entropy_map.max(), iter)
+            writer.add_scalar('loss-{}/total'.format(env_step_tag), avg_loss_total, iter)
+            writer.add_scalar('loss-{}/joint'.format(env_step_tag), avg_loss_joint, iter)
+            writer.add_scalar('loss-{}/marginal'.format(env_step_tag), avg_loss_marginal, iter)
+            writer.add_scalar('empowerment-{}/min'.format(env_step_tag), empowerment_map.min(), iter)
+            writer.add_scalar('empowerment-{}/max'.format(env_step_tag), empowerment_map.max(), iter)
+            writer.add_scalar('empowerment-{}/mean'.format(env_step_tag), emp_mean, iter)
+            writer.add_scalar('entropy-{}/min'.format(env_step_tag), entropy_map.min(), iter)
+            writer.add_scalar('entropy-{}/max'.format(env_step_tag), entropy_map.max(), iter)
+            writer.add_scalar('entropy-{}/mean'.format(env_step_tag), entr_mean, iter)
 
-            print('iter {:8d} - loss fgan {:6.4f} - entropy {:6.4f} - {:4.1f}s'.format(
+            print('iter {:8d} - loss {:6.4f} - empowerment {:6.4f} - entropy {:6.4f} - {:4.1f}s'.format(
                 iter,
                 avg_loss_total,
-                entropy_map.mean(),
+                emp_mean,
+                entr_mean,
                 timer() - start,
             ))
             cumul_loss_total = 0

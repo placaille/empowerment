@@ -8,8 +8,8 @@ class fGAN:
         divergence_name (str): ['kl', 'js']
 
         score/discriminator obj
-        kl: E_pos[logits] - E_neg[exp(logits-1)]
-        js: E_pos[log(sigmoid(logits))] - E_neg[-log(1-sigmoid(logits))]
+        kl: E_pos[logits] + E_neg[-exp(logits-1)]
+        js: E_pos[log(sigmoid(logits))] + E_neg[log(1-sigmoid(logits))]
 
         source distr obj
 
@@ -20,11 +20,11 @@ class fGAN:
         if self.divergence_name == 'kl':
             self.constant = 0
             self.pos_score = lambda logits: logits
-            self.neg_score = lambda logits: (logits-1).exp()
+            self.neg_score = lambda logits: -(logits-1).exp()
         elif self.divergence_name == 'js':
             self.constant = math.log(4)
             self.pos_score = lambda logits: F.logsigmoid(logits)
-            self.neg_score = lambda logits: -(F.logsigmoid(logits) - logits)
+            self.neg_score = lambda logits: F.logsigmoid(logits) - logits
 
     def discr_obj(self, pos_logits, neg_logits):
         """
@@ -33,9 +33,3 @@ class fGAN:
         """
         constant = torch.tensor(self.constant).float().expand(pos_logits.shape[0], 1)
         return constant.to(pos_logits.device), self.pos_score(pos_logits), self.neg_score(neg_logits)
-
-    def positive_obj(self, logits):
-        return self.pos_score(logits).mean()
-
-    def negative_obj(self, logits):
-        return - self.neg_score(logits).mean()

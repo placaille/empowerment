@@ -7,7 +7,6 @@ from torch.distributions import Categorical, RelaxedOneHotCategorical
 
 def get_empowerment_values(agent, env, num_sample=1000):
     with torch.no_grad():
-        eye_tensor = torch.eye(agent.num_actions_seqs)
         empowerment_values = []
         for state in env.free_states:
             init_obs_all = torch.FloatTensor(num_sample, len(env.free_states)).zero_()
@@ -18,11 +17,9 @@ def get_empowerment_values(agent, env, num_sample=1000):
             onehot_seq_all = []
             for init_obs in init_obs_iterator:
                 seq_logits = F.log_softmax(agent.model_source_distr(init_obs), dim=-1)
-                seq_distr = RelaxedOneHotCategorical(agent.temperature, logits=seq_logits)
-
-                max_ids = seq_distr.rsample().argmax(dim=-1)
-                action_seqs = [agent.actions_lists[seq_id.item()] for seq_id in max_ids]
-                onehot_seq = eye_tensor[max_ids]
+                relaxed_distr = RelaxedOneHotCategorical(agent.temperature, logits=seq_logits)
+                soft_onehot = relaxed_distr.rsample()
+                action_seqs = [agent.actions_lists[seq_id.item()] for seq_id in soft_onehot.argmax(-1)]
 
                 for (obs, action_seq) in zip(init_obs, action_seqs):
                     env.reset(state=state)
@@ -31,7 +28,7 @@ def get_empowerment_values(agent, env, num_sample=1000):
                         obs = env.step(action)
 
                     end_obs_all.append(obs)
-                onehot_seq_all.append(onehot_seq)
+                onehot_seq_all.append(soft_onehot)
 
             end_obs_all = torch.tensor(end_obs_all, dtype=torch.float32).to(agent.device)
             onehot_seq_all = torch.cat(onehot_seq_all).to(agent.device)
@@ -60,7 +57,7 @@ def get_empowerment_values(agent, env, num_sample=1000):
                     scores_joint_sum += scores_joint.data.sum()
                     scores_marginal_sum += scores_marginal.data.sum()
 
-            empowerment = (constant_sum + scores_joint_sum - scores_marginal_sum) / num_sample
+            empowerment = (constant_sum + scores_joint_sum + scores_marginal_sum) / num_sample
             empowerment_values.append(empowerment.item())
 
     return np.array(empowerment_values)
