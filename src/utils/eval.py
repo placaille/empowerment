@@ -57,7 +57,7 @@ def get_empowerment_values(agent, env, num_sample=1000):
                     scores_joint_sum += scores_joint.data.sum()
                     scores_marginal_sum += scores_marginal.data.sum()
 
-            empowerment = (constant_sum + scores_joint_sum + scores_marginal_sum) / num_sample
+            empowerment = (constant_sum + scores_joint_sum - scores_marginal_sum) / num_sample
             empowerment_values.append(empowerment.item())
 
     return np.array(empowerment_values)

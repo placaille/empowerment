@@ -108,8 +108,11 @@ class fGANGumbelDiscreteStaticAgent(object):
         logits_joint = self.model_score(stack_joint.to(self.device))
         logits_marginal = self.model_score(stack_marginal.to(self.device))
 
-        loss_joint = - self.fgan.pos_score(logits_joint).mean()
-        loss_marginal = - self.fgan.neg_score(logits_marginal).mean()
+        score_joint = self.fgan.pos_score(logits_joint)
+        score_marginal = self.fgan.neg_score(logits_marginal)
+
+        loss_joint = - score_joint.mean()
+        loss_marginal = score_marginal.mean()
 
         loss_total = loss_joint + loss_marginal
 
