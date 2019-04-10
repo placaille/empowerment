@@ -1,1 +1,1 @@
-from .models import MLP, MLPBatchNorm
+from .models import MLP, MLPDropout, MLPDeeper, MLPBatchNorm, MLPShallow

@@ -8,7 +8,7 @@ class fGAN:
         divergence_name (str): ['kl', 'js']
 
         score/discriminator obj
-        kl: E_pos[logits] - E_neg[-exp(logits-1)]
+        kl: E_pos[logits] - E_neg[exp(logits-1)]
         js: E_pos[log(sigmoid(logits))] - E_neg[-log(1-sigmoid(logits))]
 
         source distr obj

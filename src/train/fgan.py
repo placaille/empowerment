@@ -48,12 +48,11 @@ import utils
 @click.option('--hidden-size', type=int, default=32)
 @click.option('--iter-per-eval', type=int, default=1000, help='Number of training iterations between evaluations')
 @click.option('--max-iter', type=int, default=1000000)
-@click.option('--emp-alpha', type=float, default=0.001, help='Emp table moving average weight (def. 0.001)')
-@click.option('--entropy-weight', type=float, default=0.1, help='Entropy weight regularization (def. 0.1)')
-@click.option('--gumbel-temp-start', type=float, default=0.5, help='Starting temp for Gumbel-Softax (def. 0.5)')
 @click.option('--memory-size', type=int, default=100000)
-@click.option('--samples-per-train', type=int, default=100)
-@click.option('--batch_size', type=int, default=128)
+@click.option('--samples-for-grad', type=int, default=16)
+@click.option('--samples-for-eval', type=int, default=100)
+@click.option('--batch-size', type=int, default=128)
+@click.option('--weight-decay', type=float, default=0)
 def main(**kwargs):
     pre_trained_dir = os.path.expanduser(kwargs.get('pre_trained_dir'))
     log_dir = os.path.expanduser(kwargs.get('log_dir'))
@@ -70,12 +69,11 @@ def main(**kwargs):
     hidden_size = kwargs.get('hidden_size')
     iter_per_eval = kwargs.get('iter_per_eval')
     max_iter = kwargs.get('max_iter')
-    emp_alpha = kwargs.get('emp_alpha')
-    gumbel_temp_start = kwargs.get('gumbel_temp_start')
-    entropy_weight = kwargs.get('entropy_weight')
     memory_size = kwargs.get('memory_size')
-    samples_per_train = kwargs.get('samples_per_train')
+    samples_for_grad = kwargs.get('samples_for_grad')
+    samples_for_eval = kwargs.get('samples_for_eval')
     batch_size = kwargs.get('batch_size')
+    weight_decay = kwargs.get('weight_decay')
 
     if tensorboard_dir is None:
         tensorboard_dir = log_dir
@@ -104,17 +102,16 @@ def main(**kwargs):
             path_score = os.path.join(pre_trained_dir, '{}_score.pth'.format(env_name))
         if not train_source_distr:
             path_source_distr = os.path.join(pre_trained_dir, '{}_source_distr.pth'.format(env_name))
-    agent = agents.fGANGumbelDiscreteStaticAgent(
+    agent = agents.fGANDiscreteStaticAgent(
         actions=env.actions,
         observation_size=env.observation_space.n,
         hidden_size=hidden_size,
         emp_num_steps=num_steps,
-        alpha=emp_alpha,
         divergence_name=diverg_name,
-        mem_size=2*batch_size,
-        mem_fields=['obs_start', 'obs_end', 'act_seq', 'seq_soft_onehot'],
+        mem_size=memory_size,
+        mem_fields=['obs_start', 'obs_end', 'act_seq', 'seq_onehot'],
         max_batch_size=batch_size,
-        temperature_start=gumbel_temp_start,
+        num_samples_grad=samples_for_grad,
         train_score=train_score,
         train_source_distr=train_source_distr,
         path_score=path_score,
@@ -122,6 +119,7 @@ def main(**kwargs):
         optim_name=optim_name,
         learning_rate=learning_rate,
         momentum=momentum,
+        weight_decay=weight_decay,
         device=device,
     )
 
@@ -131,38 +129,30 @@ def main(**kwargs):
     for (k, v) in kwargs.items():
         writer.add_text('{}'.format(k), str(v))
     action_seq = deque(maxlen=num_steps)
-    cumul_loss_total = 0
-    cumul_loss_joint = 0
-    cumul_loss_marginal = 0
+    cumul_loss_score = {
+        'total': 0,
+        'joint': 0,
+        'marginal': 0,
+    }
     start = timer()
 
     print('Starting training..')
     for iter in count(start=1):
-        init_obs = [env.reset() for _ in range(2*batch_size)]
-        action_seqs = agent.sample_source_distr(init_obs)
-        for (obs, action_seq, soft_onehot) in zip(init_obs, action_seqs['actions'], action_seqs['soft_onehot']):
-            env.reset(state=obs.argmax())
-            prev_obs = obs
-            for action in action_seq:
-                obs = env.step(action)
 
-            agent.memory.add_data(
-                obs_start=prev_obs,
-                obs_end=obs,
-                act_seq=action_seq,
-                seq_soft_onehot=soft_onehot,
-            )
-        losses = agent.train_step()
-        cumul_loss_total += losses['loss_total']
-        cumul_loss_joint += losses['loss_joint']
-        cumul_loss_marginal += losses['loss_marginal']
+        state = env.reset()
+        losses = agent.train_step(env, state)
 
+        cumul_loss_score['total'] += losses['score']['total']
+        cumul_loss_score['joint'] += losses['score']['joint']
+        cumul_loss_score['marginal'] += losses['score']['marginal']
+
+        # log stuff
         if iter % iter_per_eval == 0 or iter == max_iter:
-            avg_loss_total = cumul_loss_total / iter_per_eval
-            avg_loss_joint = cumul_loss_joint / iter_per_eval
-            avg_loss_marginal = cumul_loss_marginal / iter_per_eval
+            avg_loss_total = cumul_loss_score['total'] / iter_per_eval
+            avg_loss_joint = cumul_loss_score['joint'] / iter_per_eval
+            avg_loss_marginal = cumul_loss_score['marginal'] / iter_per_eval
 
-            empowerment_map, emp_mean = agent.compute_empowerment_map(env)
+            empowerment_map, emp_mean = agent.compute_empowerment_map(env, samples_for_eval)
             entropy_map, entr_mean = agent.compute_entropy_map(env)
 
             env_step_tag = '{}-{}-steps'.format(env_name, num_steps)
@@ -196,10 +186,9 @@ def main(**kwargs):
                 entr_mean,
                 timer() - start,
             ))
-            cumul_loss_total = 0
-            cumul_loss_joint = 0
-            cumul_loss_marginal = 0
-            agent.anneal_temperature(iter)
+            cumul_loss_score['total'] = 0
+            cumul_loss_score['joint'] = 0
+            cumul_loss_score['marginal'] = 0
             start = timer()
 
         if iter >= max_iter:

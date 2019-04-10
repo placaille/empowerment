@@ -18,7 +18,7 @@ done
 # Project specific values
 out_dir=$SCRATCH/projects/augusta/jobs
 tensorboard_dir=$SCRATCH/projects/augusta/tensorboard
-python_file=src/train/fgan_gumbel.py  # (will be called from job repository)
+python_file=src/train/fgan.py
 
 # Assume running this from the script directory
 job_dir=$PWD/jobs
@@ -31,7 +31,7 @@ if [ ! -z "$group_name" ]; then
 fi
 
 # Launch loop
-for config_file in $config_dir/*.conf; do
+for config_file in $config_dir/*conf.yml; do
   config_name=$(basename $config_file)
   timestamp=$(date +%s%3N)
   config_id="${config_name%.*}"
@@ -40,7 +40,7 @@ for config_file in $config_dir/*.conf; do
   job_file=$job_dir/${unique_id}.job
   job_out_dir=$out_dir/$unique_id
   job_tensorboard_dir=$tensorboard_dir/$unique_id
-  job_tmp_dir=\$TMPDIR/$unique_id
+  job_tmp_dir=/Tmp/lacaillp/$unique_id
 
   # copy current version of code
   echo Launching job $group_name/${unique_id}..
@@ -78,7 +78,7 @@ source activate augusta
 #SBATCH --job-name=$config_name.job
 #SBATCH --output=$job_out_dir/slurm-%j.out
 #SBATCH --error=$job_out_dir/slurm-%j.err
-#SBATCH --time=2:00:00
+#SBATCH --time=7:00:00
 #SBATCH --mem=4G
 #SBATCH -c 1
 #SBATCH --qos=low

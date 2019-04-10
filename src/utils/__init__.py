@@ -1,4 +1,4 @@
-from utils.logging import *
+from utils.logging_utils import *
 from utils.memory import Memory
 from utils.mine_objective import UnbiasedMine, BiasedMine
 from utils.fgan_objective import fGAN

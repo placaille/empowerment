@@ -18,7 +18,7 @@ done
 # Project specific values
 out_dir=$SCRATCH/projects/augusta/jobs
 tensorboard_dir=$SCRATCH/projects/augusta/tensorboard
-python_file=src/train/fgan_gumbel.py  # (will be called from job repository)
+python_file=src/train/fgan.py  # (will be called from job repository)
 
 # Assume running this from the script directory
 job_dir=$PWD/jobs
@@ -31,7 +31,7 @@ if [ ! -z "$group_name" ]; then
 fi
 
 # Launch loop
-for config_file in $config_dir/*.conf; do
+for config_file in $config_dir/*conf.yml; do
   config_name=$(basename $config_file)
   timestamp=$(gdate +%s%3N) || timestamp=$(date +%s%3N)
   config_id="${config_name%.*}"

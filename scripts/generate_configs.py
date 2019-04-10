@@ -33,19 +33,18 @@ def hybrid_float_sampling(categorical_value, float_prob, min, max, base=10):
 def main(args):
     env_name='CrossRoom-v0'
     num_steps=2
-    max_iter=150000
-    iter_per_eval=1000
+    max_iter=10000000
+    iter_per_eval=100000
     force_cpu='true'
-    train_score='false'
+    train_score='true'
     train_source_distr='true'
-    pre_trained_dir='~/Scratch/projects/augusta/pre_trained_models/fgan/repro/2_steps/js'
-    diverg_name='js'
-    comment='hp search for training generator on optim and gumbel temp'
+    batch_size = 1
+    pre_trained_dir='~/Scratch/projects/augusta/pre_trained_models/fgan/repro/2_steps/kl'
+    diverg_name='kl'
+    comment= 'testing new log prob form'
 
-    batch_size_fn = lambda: exp_scale_int_sampling(min=2**6, max=2**8, base=2)
-    gumbel_temp_fn = lambda: exp_scale_float_sampling(min=2**-3, max=2**3, base=2, rounding=7)
     learning_rate_fn = lambda: exp_scale_float_sampling(min=10**-5, max=10**-1, base=10, rounding=7)
-    momentum_fn = lambda: hybrid_float_sampling(categorical_value=0.0, float_prob=0.7, min=0.0001, max=0.9, base=10)
+    momentum_fn = lambda: hybrid_float_sampling(categorical_value=0.0, float_prob=0.5, min=0.0001, max=0.9, base=10)
     optim_name_fn = lambda: categorical_sampling(['sgd', 'adam', 'rmsprop'])
 
     num_configs = args.num_configs
@@ -66,19 +65,16 @@ def main(args):
             f.write('train-source-distr: {}\n'.format(train_source_distr))
             f.write('pre-trained-dir: {}\n'.format(pre_trained_dir))
             f.write('diverg-name: {}\n'.format(diverg_name))
+            f.write('batch-size: {}\n'.format(batch_size))
             f.write('comment: {}\n'.format(comment))
 
             # sampling hyper-params
-            b = batch_size_fn()
-            t = gumbel_temp_fn()
             l = learning_rate_fn()
             m = momentum_fn()
             o = optim_name_fn()
             if o == 'adam' and m != 0.0:
                 continue
 
-            f.write('batch-size: {}\n'.format(b))
-            f.write('gumbel-temp-start: {}\n'.format(t))
             f.write('learning-rate: {}\n'.format(l))
             f.write('momentum: {}\n'.format(m))
             f.write('optim-name: {}\n'.format(o))
