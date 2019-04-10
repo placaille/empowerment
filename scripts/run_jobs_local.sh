@@ -31,7 +31,7 @@ if [ ! -z "$group_name" ]; then
 fi
 
 # Launch loop
-for config_file in $config_dir/*conf.yml; do
+for config_file in $config_dir/*.yml; do
   config_name=$(basename $config_file)
   timestamp=$(gdate +%s%3N) || timestamp=$(date +%s%3N)
   config_id="${config_name%.*}"
