@@ -38,6 +38,7 @@ import utils
     'sgd',
     'rmsprop',
 ]))
+@click.option('--seed', default=None, type=int)
 @click.option('--learning-rate', default=0.0001, type=float)
 @click.option('--momentum', default=0.0, type=float)
 @click.option('--comment', type=str, default=None, help='Comment stored in the args')
@@ -60,6 +61,7 @@ def main(**kwargs):
     env_name = kwargs.get('env_name')
     diverg_name = kwargs.get('diverg_name')
     optim_name = kwargs.get('optim_name')
+    seed = kwargs.get('seed')
     learning_rate = kwargs.get('learning_rate')
     momentum = kwargs.get('momentum')
     force_cpu = kwargs.get('force_cpu')
@@ -90,6 +92,12 @@ def main(**kwargs):
         device = torch.device('cpu')
     else:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    if seed is not None:
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     print('Initializing env..')
     env = gym.make(env_name)
