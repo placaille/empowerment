@@ -18,21 +18,23 @@ class fGANDiscreteStaticAgent(object):
     def __init__(self, **kwargs):
         assert type(kwargs.get('actions')) is dict
         self.device = kwargs.get('device')
-        self.divergence_name = kwargs.get('divergence_name')
-        self.max_batch_size = kwargs.get('max_batch_size')
+        self.divergence_name = kwargs.get('diverg_name')
+        self.max_batch_size = kwargs.get('batch_size')
         self.num_samples_grad = kwargs.get('num_samples_grad')
         self.actions = kwargs.get('actions')
 
         observation_size = kwargs.get('observation_size')
         hidden_size = kwargs.get('hidden_size')
-        path_score = kwargs.get('path_score')
-        path_source_distr = kwargs.get('path_source_distr')
-        self.train_score = kwargs.get('train_score')
-        self.train_source_distr = kwargs.get('train_source_distr')
-        optim_name = kwargs.get('optim_name')
-        learning_rate = kwargs.get('learning_rate')
-        momentum = kwargs.get('momentum')
-        weight_decay = kwargs.get('weight_decay')
+
+        # optim config
+        score_optim_name = kwargs.get('score_optim_name')
+        score_lr = kwargs.get('score_lr')
+        score_momentum = kwargs.get('score_momentum')
+        score_weight_decay = kwargs.get('score_weight_decay')
+        source_distr_optim_name = kwargs.get('source_distr_optim_name')
+        source_distr_lr = kwargs.get('source_distr_lr')
+        source_distr_momentum = kwargs.get('source_distr_momentum')
+        source_distr_weight_decay = kwargs.get('source_distr_weight_decay')
 
         mem_size = kwargs.get('mem_size')
         mem_fields = kwargs.get('mem_fields')
@@ -49,31 +51,38 @@ class fGANDiscreteStaticAgent(object):
         self.num_actions_seqs = len(self.actions_seqs)
 
         self.fgan = utils.fGAN(self.divergence_name)
+
         # model used to compute score (or marginals/joint) (s`+a, conditioned on s)
         self.model_score = models.MLPShallow(2*observation_size+len(self.actions_seqs), hidden_size, 1)
-        if path_score:
-            self.model_score.load(path_score)
         self.model_score.to(self.device)
 
-        self.model_source_distr = models.MLPShallow(observation_size, hidden_size, len(self.actions_seqs))
-        if path_source_distr:
-            self.model_source_distr.load(path_source_distr)
-        self.model_source_distr.to(self.device)
+        # optim score
+        if score_optim_name == 'adam':
+            self.optim_score = optim.Adam(self.model_score.parameters(),
+                lr=score_lr, weight_decay=score_weight_decay)
+        elif score_optim_name == 'sgd':
+            self.optim_score = optim.SGD(self.model_score.parameters(),
+                lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
+        elif score_optim_name == 'rmsprop':
+            self.optim_score = optim.RMSprop(self.model_score.parameters(),
+                lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
 
         self.obj = self.fgan.discr_obj  # returns averything to compute empowerment
 
-        params = []
-        if self.train_score:
-            params += list(self.model_score.parameters())
-        if self.train_source_distr:
-            params += list(self.model_source_distr.parameters())
+        # source distribution/generator/policy
+        self.model_source_distr = models.LinearModel(observation_size, hidden_size, len(self.actions_seqs))
+        self.model_source_distr.to(self.device)
 
-        if optim_name == 'adam':
-            self.optim = optim.Adam(params, lr=learning_rate, weight_decay=weight_decay)
-        elif optim_name == 'sgd':
-            self.optim = optim.SGD(params, lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
-        elif optim_name == 'rmsprop':
-            self.optim = optim.RMSprop(params, lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+        # optim source distr
+        if source_distr_optim_name == 'adam':
+            self.optim_source_distr = optim.Adam(self.model_source_distr.parameters(),
+            lr=source_distr_lr, weight_decay=source_distr_weight_decay)
+        elif source_distr_optim_name == 'sgd':
+            self.optim_source_distr = optim.SGD(self.model_source_distr.parameters(),
+            lr=source_distr_lr, momentum=source_distr_momentum, weight_decay=source_distr_weight_decay)
+        elif source_distr_optim_name == 'rmsprop':
+            self.optim_source_distr = optim.RMSprop(self.model_source_distr.parameters(),
+            lr=source_distr_lr, momentum=source_distr_momentum, weight_decay=source_distr_weight_decay)
 
         self.memory = utils.Memory(mem_size, *mem_fields)
 
@@ -143,21 +152,18 @@ class fGANDiscreteStaticAgent(object):
         # compute gradient source (inverse sign for gradient descent)
         grad_seq_log_probs = score_marg_1.detach() + score_marg_2.detach() - score_joint.detach()
 
-        self.optim.zero_grad()
+        self.optim_score.zero_grad()
+        self.optim_source_distr.zero_grad()
         loss_score_total.backward()
         seq_log_probs.gather(0, seq_id).backward(gradient=grad_seq_log_probs)
-        self.optim.step()
+        self.optim_score.step()
+        self.optim_source_distr.step()
 
         # prep out
-        out = {'score':{
-            'total': 0,
-            'joint': 0,
-            'marginal': 0,
-        }}
-        if self.train_score:
-            out['score']['total'] = loss_score_total.item()
-            out['score']['joint'] = loss_score_joint.item()
-            out['score']['marginal'] = loss_score_marginal.item()
+        out = {'score':{}}
+        out['score']['total'] = loss_score_total.item()
+        out['score']['joint'] = loss_score_joint.item()
+        out['score']['marginal'] = loss_score_marginal.item()
 
         return out
 

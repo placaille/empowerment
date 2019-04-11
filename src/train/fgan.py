@@ -29,22 +29,18 @@ import utils
     'CrossRoom-v0',
     'RoomPlus2Corrid-v0',
 ]))
-@click.option('--diverg-name', default='js', type=click.Choice([
-    'js',
-    'kl'
-]))
-@click.option('--optim-name', default='adam', type=click.Choice([
-    'adam',
-    'sgd',
-    'rmsprop',
-]))
-@click.option('--seed', default=None, type=int)
-@click.option('--learning-rate', default=0.0001, type=float)
-@click.option('--momentum', default=0.0, type=float)
+@click.option('--diverg-name', default='js', type=click.Choice(['js', 'kl']))
+@click.option('--seed', default=None)
+@click.option('--score-optim-name', default='adam', type=click.Choice(['adam', 'sgd', 'rmsprop']))
+@click.option('--score-lr', default=0.0001, type=float)
+@click.option('--score-momentum', default=0.0, type=float)
+@click.option('--score-weight-decay', type=float, default=0)
+@click.option('--source-distr-optim-name', default='adam', type=click.Choice(['adam', 'sgd', 'rmsprop']))
+@click.option('--source-distr-lr', default=0.0001, type=float)
+@click.option('--source-distr-momentum', default=0.0, type=float)
+@click.option('--source-distr-weight-decay', type=float, default=0)
 @click.option('--comment', type=str, default=None, help='Comment stored in the args')
 @click.option('--force-cpu', default=False, type=bool)
-@click.option('--train-score', default=True, type=bool)
-@click.option('--train-source-distr', default=True, type=bool)
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--hidden-size', type=int, default=32)
 @click.option('--iter-per-eval', type=int, default=1000, help='Number of training iterations between evaluations')
@@ -53,29 +49,15 @@ import utils
 @click.option('--samples-for-grad', type=int, default=16)
 @click.option('--samples-for-eval', type=int, default=100)
 @click.option('--batch-size', type=int, default=128)
-@click.option('--weight-decay', type=float, default=0)
 def main(**kwargs):
     pre_trained_dir = os.path.expanduser(kwargs.get('pre_trained_dir'))
     log_dir = os.path.expanduser(kwargs.get('log_dir'))
     tensorboard_dir = os.path.expanduser(kwargs.get('tensorboard_dir'))
     env_name = kwargs.get('env_name')
-    diverg_name = kwargs.get('diverg_name')
-    optim_name = kwargs.get('optim_name')
     seed = kwargs.get('seed')
-    learning_rate = kwargs.get('learning_rate')
-    momentum = kwargs.get('momentum')
-    force_cpu = kwargs.get('force_cpu')
-    train_score = kwargs.get('train_score')
-    train_source_distr = kwargs.get('train_source_distr')
     num_steps = kwargs.get('num_steps')
-    hidden_size = kwargs.get('hidden_size')
     iter_per_eval = kwargs.get('iter_per_eval')
     max_iter = kwargs.get('max_iter')
-    memory_size = kwargs.get('memory_size')
-    samples_for_grad = kwargs.get('samples_for_grad')
-    samples_for_eval = kwargs.get('samples_for_eval')
-    batch_size = kwargs.get('batch_size')
-    weight_decay = kwargs.get('weight_decay')
 
     if tensorboard_dir is None:
         tensorboard_dir = log_dir
@@ -88,47 +70,28 @@ def main(**kwargs):
     with open(os.path.join(log_dir, 'args.info'), 'w') as f:
         f.write(str(kwargs))
 
-    if force_cpu:
+    if  kwargs.get('force_cpu'):
         device = torch.device('cpu')
     else:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if seed is not None:
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        np.random.seed(int(seed))
+        torch.manual_seed(int(seed))
+        # torch.backends.cudnn.deterministic = True
+        # torch.backends.cudnn.benchmark = False
 
     print('Initializing env..')
     env = gym.make(env_name)
 
     print('Initializing agent and models..')
-    if pre_trained_dir is not None:
-        path_score = None
-        path_source_distr = None
-        if not train_score:
-            path_score = os.path.join(pre_trained_dir, '{}_score.pth'.format(env_name))
-        if not train_source_distr:
-            path_source_distr = os.path.join(pre_trained_dir, '{}_source_distr.pth'.format(env_name))
     agent = agents.fGANDiscreteStaticAgent(
         actions=env.actions,
         observation_size=env.observation_space.n,
-        hidden_size=hidden_size,
         emp_num_steps=num_steps,
-        divergence_name=diverg_name,
-        mem_size=memory_size,
         mem_fields=['obs_start', 'obs_end', 'act_seq', 'seq_onehot'],
-        max_batch_size=batch_size,
-        num_samples_grad=samples_for_grad,
-        train_score=train_score,
-        train_source_distr=train_source_distr,
-        path_score=path_score,
-        path_source_distr=path_source_distr,
-        optim_name=optim_name,
-        learning_rate=learning_rate,
-        momentum=momentum,
-        weight_decay=weight_decay,
         device=device,
+        **kwargs,
     )
 
     print('Initializing misc..')
@@ -160,7 +123,7 @@ def main(**kwargs):
             avg_loss_joint = cumul_loss_score['joint'] / iter_per_eval
             avg_loss_marginal = cumul_loss_score['marginal'] / iter_per_eval
 
-            empowerment_map, emp_mean = agent.compute_empowerment_map(env, samples_for_eval)
+            empowerment_map, emp_mean = agent.compute_empowerment_map(env, kwargs.get('samples_for_eval'))
             entropy_map, entr_mean = agent.compute_entropy_map(env)
 
             env_step_tag = '{}-{}-steps'.format(env_name, num_steps)
