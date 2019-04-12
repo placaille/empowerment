@@ -36,7 +36,7 @@ class fGANDiscreteStaticAgent(object):
         source_distr_momentum = kwargs.get('source_distr_momentum')
         source_distr_weight_decay = kwargs.get('source_distr_weight_decay')
 
-        mem_size = kwargs.get('mem_size')
+        mem_size = kwargs.get('memory_size')
         mem_fields = kwargs.get('mem_fields')
 
         actions_id = [str(x) for x in self.actions.values()]
@@ -130,8 +130,6 @@ class fGANDiscreteStaticAgent(object):
         obs_end_1, obs_end_2 = obs_end_all
 
         obs_start = torch.FloatTensor(init_state).to(self.device)
-        seq_onehot_1 = torch.FloatTensor(seq_onehot_1).to(self.device)
-        seq_onehot_2 = torch.FloatTensor(seq_onehot_2).to(self.device)
         obs_end_1 = torch.FloatTensor(obs_end_1).to(self.device)
         obs_end_2 = torch.FloatTensor(obs_end_2).to(self.device)
 
@@ -148,7 +146,7 @@ class fGANDiscreteStaticAgent(object):
         grad_seq_log_probs = score_marg_1.detach() + score_marg_2.detach() - score_joint.detach()
 
         self.optim_source_distr.zero_grad()
-        seq_log_probs.gather(0, seq_id_1).backward(gradient=grad_seq_log_probs)
+        seq_log_probs.gather(0, seq_id_1.to(self.device)).backward(grad_seq_log_probs)
         self.optim_source_distr.step()
 
         # prep out
