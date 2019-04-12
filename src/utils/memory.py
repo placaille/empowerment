@@ -11,18 +11,24 @@ class Memory:
         >>> memory = Memory(100, 'state_start', 'state_stop', 'reward')
         >>> memory = Memory(100, 'state_start', 'state_stop', 'done')
         """
-        self.queue = deque(maxlen=mem_size)
+        self.mem_size = mem_size
+        self.queue = []
+        self.position = -1
         self.new_data_type = namedtuple('data', mem_fields)
 
     def add_data(self, **kwargs):
-        self.queue.append(self.new_data_type(**kwargs))
+
+        if len(self.queue) < self.mem_size:
+            self.queue.append(None)
+        self.position = (self.position + 1) % self.mem_size
+        self.queue[self.position] = self.new_data_type(**kwargs)
 
     def __len__(self):
         return len(self.queue)
 
     def __repr__(self):
         return '{} item in memory (max {}) - {}'.format(
-            len(self), self.queue.maxlen, self.new_data_type._fields
+            len(self), self.mem_size, self.new_data_type._fields
         )
 
     def sample_data(self, num_items):
