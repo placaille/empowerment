@@ -4,6 +4,7 @@ import torch
 import os
 import sys
 import shutil
+import random
 import numpy as np
 import pickle as pkl
 
@@ -78,10 +79,11 @@ def main(**kwargs):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if seed is not None:
+        random.seed(int(seed))
         np.random.seed(int(seed))
         torch.manual_seed(int(seed))
-        # torch.backends.cudnn.deterministic = True
-        # torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     print('Initializing env..')
     env = gym.make(env_name)
