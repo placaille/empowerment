@@ -44,6 +44,7 @@ import utils
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--hidden-size', type=int, default=32)
 @click.option('--iter-per-eval', type=int, default=1000, help='Number of training iterations between evaluations')
+@click.option('--iter-before-train', type=int, default=20000)
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--samples-for-grad', type=int, default=16)
@@ -57,6 +58,7 @@ def main(**kwargs):
     seed = kwargs.get('seed')
     num_steps = kwargs.get('num_steps')
     iter_per_eval = kwargs.get('iter_per_eval')
+    iter_before_train = kwargs.get('iter_before_train')
     max_iter = kwargs.get('max_iter')
 
     if tensorboard_dir is None:
@@ -105,23 +107,33 @@ def main(**kwargs):
         'joint': 0,
         'marginal': 0,
     }
+    cumul_source_distr_grad = {
+        'log_prob': 0
+    }
     start = timer()
+
+    print('Generating random data..')
+    for iter in range(iter_before_train):
+        state = env.reset()
+        agent.generate_on_policy_rollouts(env, state, num_rollouts=1, add_to_memory=True)
 
     print('Starting training..')
     for iter in count(start=1):
 
         state = env.reset()
-        losses = agent.train_step(env, state)
+        train_out = agent.train_step(env, state)
 
-        cumul_loss_score['total'] += losses['score']['total']
-        cumul_loss_score['joint'] += losses['score']['joint']
-        cumul_loss_score['marginal'] += losses['score']['marginal']
+        cumul_loss_score['total'] += train_out['score_loss']['total']
+        cumul_loss_score['joint'] += train_out['score_loss']['joint']
+        cumul_loss_score['marginal'] += train_out['score_loss']['marginal']
+        cumul_source_distr_grad['log_prob'] += train_out['source_distr_grad']['log_prob']
 
         # log stuff
         if iter % iter_per_eval == 0 or iter == max_iter:
             avg_loss_total = cumul_loss_score['total'] / iter_per_eval
             avg_loss_joint = cumul_loss_score['joint'] / iter_per_eval
             avg_loss_marginal = cumul_loss_score['marginal'] / iter_per_eval
+            avg_grad_log_prob = cumul_source_distr_grad['log_prob'] / iter_per_eval
 
             empowerment_map, emp_mean = agent.compute_empowerment_map(env, kwargs.get('samples_for_eval'))
             entropy_map, entr_mean = agent.compute_entropy_map(env)
@@ -149,8 +161,9 @@ def main(**kwargs):
             writer.add_scalar('entropy-{}/min'.format(env_step_tag), entropy_map.min(), iter)
             writer.add_scalar('entropy-{}/max'.format(env_step_tag), entropy_map.max(), iter)
             writer.add_scalar('entropy-{}/mean'.format(env_step_tag), entr_mean, iter)
+            writer.add_scalar('gradients-{}/log-prob-mean'.format(env_step_tag), avg_grad_log_prob, iter)
 
-            print('iter {:8d} - loss {:6.4f} - empowerment {:6.4f} - entropy {:6.4f} - {:4.1f}s'.format(
+            print('iter {:8d} - loss {:5.3f} - empowerment {:6.4f} - entropy {:5.3f} - {:4.1f}s'.format(
                 iter,
                 avg_loss_total,
                 emp_mean,
@@ -160,6 +173,7 @@ def main(**kwargs):
             cumul_loss_score['total'] = 0
             cumul_loss_score['joint'] = 0
             cumul_loss_score['marginal'] = 0
+            cumul_source_distr_grad['log_prob'] = 0
             start = timer()
 
         if iter >= max_iter:

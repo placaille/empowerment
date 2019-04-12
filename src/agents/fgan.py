@@ -104,31 +104,32 @@ class fGANDiscreteStaticAgent(object):
                 )
         return np.array(end_obs_all)
 
-    def train_step(self, env, init_state):
+    def generate_on_policy_rollouts(self, env, init_state, num_rollouts=1, add_to_memory=True):
+        """
+        returns everything in numpy (log_probs, samples, onehots, obs_end)
+        """
 
         obs_start = torch.FloatTensor(init_state).to(self.device)  # (batch, dims)
         seq_log_probs = F.log_softmax(self.model_source_distr(obs_start), dim=-1)  # (batch, dims)
         seq_distr = Categorical(logits=seq_log_probs)
 
-        seqs_sampled = torch.LongTensor([seq_distr.sample() for _ in range(2)])  # a, a'
-        seq_id = seqs_sampled[0]  # a
+        seqs_sampled = torch.LongTensor([seq_distr.sample() for _ in range(num_rollouts)])
+        action_seqs_all = [self.actions_lists[seq_id.item()] for seq_id in seqs_sampled]
+        seq_onehots_all = self._convert_seq_id_to_onehot(seqs_sampled)
+        init_state_all = [init_state for _ in range(num_rollouts)]
 
-        # get s'_a, s'_a'
-        action_seqs = {
-            'onehot': self._convert_seq_id_to_onehot(seqs_sampled),
-            'actions': [self.actions_lists[seq_id.item()] for seq_id in seqs_sampled],
-        }
-        obs_end_all = self.generate_rollouts(
-            env=env,
-            init_obs_all=[init_state for _ in range(2)],  # both seq start from the same state
-            actions_seqs=action_seqs['actions'],
-            seq_onehots=action_seqs['onehot'],
-            add_to_memory=False
-        )
+        obs_end_all = self.generate_rollouts(env, init_state_all, action_seqs_all, seq_onehots_all, add_to_memory)
+        return seq_log_probs, seqs_sampled, seq_onehots_all, obs_end_all
 
-        seq_onehot_1, seq_onehot_2 = action_seqs['onehot'][0], action_seqs['onehot'][1]
-        obs_end_1, obs_end_2 = obs_end_all[0], obs_end_all[1]
+    def train_source_distr_step(self, env, init_state):
+        out = self.generate_on_policy_rollouts(env, init_state, num_rollouts=2)
+        seq_log_probs, seqs_sampled, seq_onehots_all, obs_end_all = out
 
+        seq_id_1, seq_id_2 = seqs_sampled
+        seq_onehot_1, seq_onehot_2 = seq_onehots_all
+        obs_end_1, obs_end_2 = obs_end_all
+
+        obs_start = torch.FloatTensor(init_state).to(self.device)
         seq_onehot_1 = torch.FloatTensor(seq_onehot_1).to(self.device)
         seq_onehot_2 = torch.FloatTensor(seq_onehot_2).to(self.device)
         obs_end_1 = torch.FloatTensor(obs_end_1).to(self.device)
@@ -143,28 +144,59 @@ class fGANDiscreteStaticAgent(object):
         score_marg_1 = self.fgan.neg_score(self.model_score(stack_marg_1))
         score_marg_2 = self.fgan.neg_score(self.model_score(stack_marg_2))
 
-        # loss for score (inverse sign for gradient descent)
-        loss_score_joint = - score_joint
-        loss_score_marginal = score_marg_2
-
-        loss_score_total = loss_score_joint + loss_score_marginal
-
         # compute gradient source (inverse sign for gradient descent)
         grad_seq_log_probs = score_marg_1.detach() + score_marg_2.detach() - score_joint.detach()
 
-        self.optim_score.zero_grad()
         self.optim_source_distr.zero_grad()
-        loss_score_total.backward()
-        seq_log_probs.gather(0, seq_id).backward(gradient=grad_seq_log_probs)
-        self.optim_score.step()
+        seq_log_probs.gather(0, seq_id_1).backward(gradient=grad_seq_log_probs)
         self.optim_source_distr.step()
 
         # prep out
-        out = {'score':{}}
-        out['score']['total'] = loss_score_total.item()
-        out['score']['joint'] = loss_score_joint.item()
-        out['score']['marginal'] = loss_score_marginal.item()
+        source_distr_grad = {
+            'log_prob': grad_seq_log_probs.mean().item()
+        }
+        return source_distr_grad
 
+    def train_score_step(self):
+
+        batch = self.memory.sample_data(self.max_batch_size)
+
+        obs_start = torch.FloatTensor(batch.obs_start).to(self.device)
+        obs_end_1 = torch.FloatTensor(batch.obs_end).to(self.device)
+        seq_onehot_1 = torch.stack(batch.seq_onehot).to(self.device)
+        seq_onehot_2 = seq_onehot_1[torch.randperm(seq_onehot_1.shape[0])]
+
+        stack_joint = torch.cat([obs_start, obs_end_1, seq_onehot_1], dim=-1)
+        stack_marg = torch.cat([obs_start, obs_end_1, seq_onehot_2], dim=-1)
+
+        score_joint = self.fgan.pos_score(self.model_score(stack_joint))
+        score_marg = self.fgan.neg_score(self.model_score(stack_marg))
+
+        # loss for score (inverse sign for gradient descent)
+        loss_score_joint = - score_joint.mean()
+        loss_score_marginal = score_marg.mean()
+        loss_score_total = loss_score_joint + loss_score_marginal
+
+        self.optim_score.zero_grad()
+        loss_score_total.backward()
+        self.optim_score.step()
+
+        score_loss = {
+            'total': loss_score_total.item(),
+            'joint': loss_score_joint.item(),
+            'marginal': loss_score_marginal.item(),
+        }
+        return score_loss
+
+    def train_step(self, env, init_state):
+
+        score_loss = self.train_score_step()
+        source_distr_grad = self.train_source_distr_step(env, init_state)
+
+        out = {
+            'source_distr_grad': source_distr_grad,
+            'score_loss': score_loss,
+        }
         return out
 
     def compute_empowerment_map(self, env, num_sample=1000):
