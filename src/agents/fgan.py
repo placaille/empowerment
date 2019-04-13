@@ -161,6 +161,7 @@ class fGANDiscreteStaticAgent(object):
         grad_signal = (score_marg_1 + score_marg_2 - score_joint).squeeze(1)
         log_probs = seq_distrs.log_prob(seq_id_1)
 
+        # use dot product to do sum of gradients over all sampled actions
         loss_source_distr = torch.dot(log_probs, grad_signal) / source_batch_size
 
         self.optim_source_distr.zero_grad()
@@ -169,10 +170,10 @@ class fGANDiscreteStaticAgent(object):
         self.optim_source_distr.step()
 
         # prep out
-        source_distr_grad = {
-            'log_prob': loss_source_distr.item()
+        loss_source_distr = {
+            'total': loss_source_distr.item()
         }
-        return source_distr_grad
+        return loss_source_distr
 
     def train_score_step(self):
 
@@ -208,10 +209,10 @@ class fGANDiscreteStaticAgent(object):
     def train_step(self, env):
 
         score_loss = self.train_score_step()
-        source_distr_grad = self.train_source_distr_step(env)
+        source_distr_loss = self.train_source_distr_step(env)
 
         out = {
-            'source_distr_grad': source_distr_grad,
+            'source_distr_loss': source_distr_loss,
             'score_loss': score_loss,
         }
         return out

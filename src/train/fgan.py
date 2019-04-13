@@ -103,14 +103,11 @@ def main(**kwargs):
     writer.add_text('args', str(kwargs))
     for (k, v) in kwargs.items():
         writer.add_text('{}'.format(k), str(v))
-    action_seq = deque(maxlen=num_steps)
-    cumul_loss_score = {
-        'total': 0,
-        'joint': 0,
-        'marginal': 0,
-    }
-    cumul_source_distr_grad = {
-        'log_prob': 0
+    cumul_loss = {
+        'score_total': 0,
+        'score_joint': 0,
+        'score_marginal': 0,
+        'source_distr_total': 0,
     }
     start = timer()
 
@@ -124,17 +121,18 @@ def main(**kwargs):
 
         train_out = agent.train_step(env)
 
-        cumul_loss_score['total'] += train_out['score_loss']['total']
-        cumul_loss_score['joint'] += train_out['score_loss']['joint']
-        cumul_loss_score['marginal'] += train_out['score_loss']['marginal']
-        cumul_source_distr_grad['log_prob'] += train_out['source_distr_grad']['log_prob']
+        cumul_loss['score_total'] += train_out['score_loss']['total']
+        cumul_loss['score_joint'] += train_out['score_loss']['joint']
+        cumul_loss['score_marginal'] += train_out['score_loss']['marginal']
+        cumul_loss['source_distr_total'] += train_out['source_distr_loss']['total']
 
         # log stuff
         if iter % iter_per_eval == 0 or iter == max_iter:
-            avg_loss_total = cumul_loss_score['total'] / iter_per_eval
-            avg_loss_joint = cumul_loss_score['joint'] / iter_per_eval
-            avg_loss_marginal = cumul_loss_score['marginal'] / iter_per_eval
-            avg_grad_log_prob = cumul_source_distr_grad['log_prob'] / iter_per_eval
+            avg_loss_score_total = cumul_loss['score_total'] / iter_per_eval
+            avg_loss_score_joint = cumul_loss['score_joint'] / iter_per_eval
+            avg_loss_score_marginal = cumul_loss['score_marginal'] / iter_per_eval
+            avg_loss_source_distr_total = cumul_loss['source_distr_total'] / iter_per_eval
+            avg_loss_total = avg_loss_score_total + avg_loss_source_distr_total
 
             empowerment_map, emp_mean = agent.compute_empowerment_map(env, kwargs.get('samples_for_eval'))
             entropy_map, entr_mean = agent.compute_entropy_map(env)
@@ -154,15 +152,16 @@ def main(**kwargs):
                                       global_step=iter,
                                       file_name=os.path.join(log_dir, 'maps', tag_ent))
             writer.add_scalar('loss-{}/total'.format(env_step_tag), avg_loss_total, iter)
-            writer.add_scalar('loss-{}/joint'.format(env_step_tag), avg_loss_joint, iter)
-            writer.add_scalar('loss-{}/marginal'.format(env_step_tag), avg_loss_marginal, iter)
+            writer.add_scalar('loss-{}/score-total'.format(env_step_tag), avg_loss_score_total, iter)
+            writer.add_scalar('loss-{}/score-joint'.format(env_step_tag), avg_loss_score_joint, iter)
+            writer.add_scalar('loss-{}/score-marginal'.format(env_step_tag), avg_loss_score_marginal, iter)
+            writer.add_scalar('loss-{}/source-distr-total'.format(env_step_tag), avg_loss_source_distr_total, iter)
             writer.add_scalar('empowerment-{}/min'.format(env_step_tag), empowerment_map.min(), iter)
             writer.add_scalar('empowerment-{}/max'.format(env_step_tag), empowerment_map.max(), iter)
             writer.add_scalar('empowerment-{}/mean'.format(env_step_tag), emp_mean, iter)
             writer.add_scalar('entropy-{}/min'.format(env_step_tag), entropy_map.min(), iter)
             writer.add_scalar('entropy-{}/max'.format(env_step_tag), entropy_map.max(), iter)
             writer.add_scalar('entropy-{}/mean'.format(env_step_tag), entr_mean, iter)
-            writer.add_scalar('gradients-{}/log-prob-mean'.format(env_step_tag), avg_grad_log_prob, iter)
 
             print('iter {:8d} - loss {:5.3f} - empowerment {:6.4f} - entropy {:5.3f} - {:4.1f}s'.format(
                 iter,
@@ -171,10 +170,10 @@ def main(**kwargs):
                 entr_mean,
                 timer() - start,
             ))
-            cumul_loss_score['total'] = 0
-            cumul_loss_score['joint'] = 0
-            cumul_loss_score['marginal'] = 0
-            cumul_source_distr_grad['log_prob'] = 0
+            cumul_loss['score_total'] = 0
+            cumul_loss['score_joint'] = 0
+            cumul_loss['score_marginal'] = 0
+            cumul_loss['source_distr_total'] = 0
             start = timer()
 
         if iter >= max_iter:
