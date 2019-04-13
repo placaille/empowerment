@@ -117,13 +117,12 @@ def main(**kwargs):
     print('Generating random data..')
     for iter in range(iter_before_train):
         state = env.reset()
-        agent.generate_on_policy_rollouts(env, state, num_rollouts=1, add_to_memory=True)
+        agent.generate_on_policy_rollouts(env, [state], num_rollouts=1, add_to_memory=True)
 
     print('Starting training..')
     for iter in count(start=1):
 
-        state = env.reset()
-        train_out = agent.train_step(env, state)
+        train_out = agent.train_step(env)
 
         cumul_loss_score['total'] += train_out['score_loss']['total']
         cumul_loss_score['joint'] += train_out['score_loss']['joint']

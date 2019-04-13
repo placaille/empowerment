@@ -85,6 +85,7 @@ class fGANDiscreteStaticAgent(object):
             lr=source_distr_lr, momentum=source_distr_momentum, weight_decay=source_distr_weight_decay)
 
         self.memory = utils.Memory(mem_size, *mem_fields)
+        self.seq_onehot = np.eye(self.num_actions_seqs)
 
     def generate_rollouts(self, env, init_obs_all, actions_seqs, seq_onehots, add_to_memory=True):
 
@@ -104,32 +105,46 @@ class fGANDiscreteStaticAgent(object):
                 )
         return np.array(end_obs_all)
 
-    def generate_on_policy_rollouts(self, env, init_state, num_rollouts=1, add_to_memory=True):
+    def generate_on_policy_rollouts(self, env, init_states, num_rollouts=1, add_to_memory=True):
         """
-        returns everything in numpy (log_probs, samples, onehots, obs_end)
+        returns (log_probs, samples, onehots, obs_end)
         """
+        assert isinstance(init_states, list)
 
-        obs_start = torch.FloatTensor(init_state).to(self.device)  # (batch, dims)
+        obs_start = torch.FloatTensor(init_states).to(self.device)  # (batch, dims)
         seq_log_probs = F.log_softmax(self.model_source_distr(obs_start), dim=-1)  # (batch, dims)
-        seq_distr = Categorical(logits=seq_log_probs)
+        seq_distrs = Categorical(logits=seq_log_probs)
+        seqs_sampled = torch.stack([seq_distrs.sample() for _ in range(num_rollouts)]).transpose(1, 0)
 
-        seqs_sampled = torch.LongTensor([seq_distr.sample() for _ in range(num_rollouts)])
-        action_seqs_all = [self.actions_lists[seq_id.item()] for seq_id in seqs_sampled]
-        seq_onehots_all = self._convert_seq_id_to_onehot(seqs_sampled)
-        init_state_all = [init_state for _ in range(num_rollouts)]
+        seq_onehots_all = []
+        obs_end_all = []
+        for (init_state, seq_sampled) in zip(init_states, seqs_sampled):
+            action_seqs = [self.actions_lists[seq_id.item()] for seq_id in seq_sampled]
+            seq_onehots = self._convert_seq_id_to_onehot(seq_sampled.cpu().numpy())
+            init_state = [init_state for _ in range(num_rollouts)]
 
-        obs_end_all = self.generate_rollouts(env, init_state_all, action_seqs_all, seq_onehots_all, add_to_memory)
-        return seq_log_probs, seqs_sampled, seq_onehots_all, obs_end_all
+            obs_end = self.generate_rollouts(env, init_state, action_seqs, seq_onehots, add_to_memory)
 
-    def train_source_distr_step(self, env, init_state):
-        out = self.generate_on_policy_rollouts(env, init_state, num_rollouts=2)
-        seq_log_probs, seqs_sampled, seq_onehots_all, obs_end_all = out
+            seq_onehots_all.append(seq_onehots)
+            obs_end_all.append(obs_end)
 
-        seq_id_1, seq_id_2 = seqs_sampled
-        seq_onehot_1, seq_onehot_2 = seq_onehots_all
-        obs_end_1, obs_end_2 = obs_end_all
+        return seq_distrs, seqs_sampled, np.array(seq_onehots_all), np.array(obs_end_all)
 
-        obs_start = torch.FloatTensor(init_state).to(self.device)
+    def train_source_distr_step(self, env):
+
+        source_batch_size = int(self.max_batch_size)
+        init_states = [env.reset() for _ in range(source_batch_size)]
+
+        out = self.generate_on_policy_rollouts(env, init_states, num_rollouts=2)
+        seq_distrs, seq_sampled, seq_onehots_all, obs_end_all = out
+
+        seq_id_1, seq_id_2 = seq_sampled.transpose(1, 0)
+        seq_onehot_1, seq_onehot_2 = seq_onehots_all.transpose(1, 0, 2)
+        obs_end_1, obs_end_2 = obs_end_all.transpose(1, 0, 2)
+
+        obs_start = torch.FloatTensor(init_states).to(self.device)
+        seq_onehot_1 = torch.FloatTensor(seq_onehot_1).to(self.device)
+        seq_onehot_2 = torch.FloatTensor(seq_onehot_2).to(self.device)
         obs_end_1 = torch.FloatTensor(obs_end_1).to(self.device)
         obs_end_2 = torch.FloatTensor(obs_end_2).to(self.device)
 
@@ -138,20 +153,24 @@ class fGANDiscreteStaticAgent(object):
         stack_marg_1 = torch.cat([obs_start, obs_end_2, seq_onehot_1], dim=-1)
         stack_marg_2 = torch.cat([obs_start, obs_end_1, seq_onehot_2], dim=-1)
 
-        score_joint = self.fgan.pos_score(self.model_score(stack_joint))
-        score_marg_1 = self.fgan.neg_score(self.model_score(stack_marg_1))
-        score_marg_2 = self.fgan.neg_score(self.model_score(stack_marg_2))
+        score_joint = self.fgan.pos_score(self.model_score(stack_joint).detach())
+        score_marg_1 = self.fgan.neg_score(self.model_score(stack_marg_1).detach())
+        score_marg_2 = self.fgan.neg_score(self.model_score(stack_marg_2).detach())
 
         # compute gradient source (inverse sign for gradient descent)
-        grad_seq_log_probs = score_marg_1.detach() + score_marg_2.detach() - score_joint.detach()
+        grad_signal = (score_marg_1 + score_marg_2 - score_joint).squeeze(1)
+        log_probs = seq_distrs.log_prob(seq_id_1)
+
+        loss_source_distr = torch.dot(log_probs, grad_signal) / source_batch_size
 
         self.optim_source_distr.zero_grad()
-        seq_log_probs.gather(0, seq_id_1.to(self.device)).backward(grad_seq_log_probs)
+        loss_source_distr.backward()
+        # seq_distrs.log_prob(seq_id_1).backward(grad_seq_log_probs)
         self.optim_source_distr.step()
 
         # prep out
         source_distr_grad = {
-            'log_prob': grad_seq_log_probs.mean().item()
+            'log_prob': loss_source_distr.item()
         }
         return source_distr_grad
 
@@ -161,7 +180,7 @@ class fGANDiscreteStaticAgent(object):
 
         obs_start = torch.FloatTensor(batch.obs_start).to(self.device)
         obs_end_1 = torch.FloatTensor(batch.obs_end).to(self.device)
-        seq_onehot_1 = torch.stack(batch.seq_onehot).to(self.device)
+        seq_onehot_1 = torch.FloatTensor(batch.seq_onehot).to(self.device)
         seq_onehot_2 = seq_onehot_1[torch.randperm(seq_onehot_1.shape[0])]
 
         stack_joint = torch.cat([obs_start, obs_end_1, seq_onehot_1], dim=-1)
@@ -186,10 +205,10 @@ class fGANDiscreteStaticAgent(object):
         }
         return score_loss
 
-    def train_step(self, env, init_state):
+    def train_step(self, env):
 
         score_loss = self.train_score_step()
-        source_distr_grad = self.train_source_distr_step(env, init_state)
+        source_distr_grad = self.train_source_distr_step(env)
 
         out = {
             'source_distr_grad': source_distr_grad,
@@ -237,7 +256,7 @@ class fGANDiscreteStaticAgent(object):
         distr = Categorical(logits=seq_logits)
         action_ids = distr.sample()
         out = {
-            'onehot': self._convert_seq_id_to_onehot(action_ids),
+            'onehot': self._convert_seq_id_to_onehot(action_ids.cpu().numpy()),
             'actions': [self.actions_lists[act.item()] for act in action_ids],
             }
         return out
@@ -246,7 +265,6 @@ class fGANDiscreteStaticAgent(object):
         return ''.join([str(x) for x in actions])
 
     def _convert_seq_id_to_onehot(self, seq_id):
-        self.seq_onehot = torch.eye(self.num_actions_seqs).to(self.device)
         return self.seq_onehot[seq_id]
 
     def eval_mode(self):

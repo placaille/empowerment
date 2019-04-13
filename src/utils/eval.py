@@ -26,7 +26,7 @@ def get_empowerment_values(agent, env, num_sample=1000):
             onehot_seq_all.append(out['onehot'])
 
         end_obs_all = torch.tensor(end_obs_all, dtype=torch.float32).to(agent.device)
-        onehot_seq_all = torch.cat(onehot_seq_all).to(agent.device)
+        onehot_seq_all = torch.FloatTensor(np.concatenate(onehot_seq_all)).to(agent.device)
         shuffled_ids = torch.randperm(onehot_seq_all.shape[0])
         onehot_seq_all_shfld = onehot_seq_all[shuffled_ids]
 
