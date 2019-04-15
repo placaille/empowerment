@@ -22,6 +22,7 @@ class fGANDiscreteStaticAgent(object):
         self.max_batch_size = kwargs.get('batch_size')
         self.num_samples_grad = kwargs.get('num_samples_grad')
         self.actions = kwargs.get('actions')
+        self.use_baseline = kwargs.get('use_baseline')
 
         observation_size = kwargs.get('observation_size')
         hidden_size = kwargs.get('hidden_size')
@@ -38,6 +39,7 @@ class fGANDiscreteStaticAgent(object):
 
         mem_size = kwargs.get('memory_size')
         mem_fields = kwargs.get('mem_fields')
+        self.memory = utils.Memory(mem_size, *mem_fields)
 
         actions_id = [str(x) for x in self.actions.values()]
         self.actions_keys = [''.join(act_seq) for act_seq in
@@ -51,6 +53,9 @@ class fGANDiscreteStaticAgent(object):
         self.num_actions_seqs = len(self.actions_seqs)
 
         self.fgan = utils.fGAN(self.divergence_name)
+
+        self.seq_onehot = np.eye(self.num_actions_seqs)
+        self.empowerment_values = torch.zeros(observation_size).to(self.device)
 
         # model used to compute score (or marginals/joint) (s`+a, conditioned on s)
         self.model_score = models.MLPShallow(2*observation_size+len(self.actions_seqs), hidden_size, 1)
@@ -83,9 +88,6 @@ class fGANDiscreteStaticAgent(object):
         elif source_distr_optim_name == 'rmsprop':
             self.optim_source_distr = optim.RMSprop(self.model_source_distr.parameters(),
             lr=source_distr_lr, momentum=source_distr_momentum, weight_decay=source_distr_weight_decay)
-
-        self.memory = utils.Memory(mem_size, *mem_fields)
-        self.seq_onehot = np.eye(self.num_actions_seqs)
 
     def generate_rollouts(self, env, init_obs_all, actions_seqs, seq_onehots, add_to_memory=True):
 
@@ -153,16 +155,19 @@ class fGANDiscreteStaticAgent(object):
         stack_marg_1 = torch.cat([obs_start, obs_end_2, seq_onehot_1], dim=-1)
         stack_marg_2 = torch.cat([obs_start, obs_end_1, seq_onehot_2], dim=-1)
 
-        score_joint = self.fgan.pos_score(self.model_score(stack_joint).detach())
-        score_marg_1 = self.fgan.neg_score(self.model_score(stack_marg_1).detach())
-        score_marg_2 = self.fgan.neg_score(self.model_score(stack_marg_2).detach())
+        score_joint = self.fgan.pos_score(self.model_score(stack_joint))
+        score_marg_1 = self.fgan.neg_score(self.model_score(stack_marg_1))
+        score_marg_2 = self.fgan.neg_score(self.model_score(stack_marg_2))
 
         # compute gradient source (inverse sign for gradient descent)
         grad_signal = (score_marg_1 + score_marg_2 - score_joint).squeeze(1) / source_batch_size
+        if self.use_baseline:
+            baseline = self.empowerment_values[obs_start.argmax(-1)]
+            grad_signal -= baseline.to(self.device)
         log_probs = seq_distrs.log_prob(seq_id_1)
 
         self.optim_source_distr.zero_grad()
-        log_probs.backward(grad_signal)
+        log_probs.backward(grad_signal.detach())
         self.optim_source_distr.step()
 
         # prep out
@@ -220,13 +225,14 @@ class fGANDiscreteStaticAgent(object):
             env=env,
             num_sample=num_sample,
         )
+        self.empowerment_values = empowerment_states
         self.train_mode()
         states_i, states_j = zip(*env.free_pos)
 
         # init map value to avg empowerment to simplify color mapping later
-        empowerment_map = np.full(env.grid.shape, empowerment_states.mean(), dtype=np.float32)
-        empowerment_map[states_i, states_j] = empowerment_states
-        return empowerment_map, empowerment_states.mean()
+        empowerment_map = np.full(env.grid.shape, empowerment_states.mean().item(), dtype=np.float32)
+        empowerment_map[states_i, states_j] = empowerment_states.cpu().numpy()
+        return empowerment_map, empowerment_states.mean().item()
 
     def compute_entropy_map(self, env):
         self.eval_mode()

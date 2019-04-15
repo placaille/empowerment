@@ -55,4 +55,4 @@ def get_empowerment_values(agent, env, num_sample=1000):
         empowerment = (constant_sum + scores_joint_sum - scores_marginal_sum) / num_sample
         empowerment_values.append(empowerment.item())
 
-    return np.array(empowerment_values)
+    return torch.tensor(empowerment_values)

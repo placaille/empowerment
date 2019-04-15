@@ -51,6 +51,7 @@ import utils
 @click.option('--samples-for-grad', type=int, default=16)
 @click.option('--samples-for-eval', type=int, default=100)
 @click.option('--batch-size', type=int, default=128)
+@click.option('--use-baseline', type=bool, default=False)
 def main(**kwargs):
     pre_trained_dir = os.path.expanduser(kwargs.get('pre_trained_dir'))
     log_dir = os.path.expanduser(kwargs.get('log_dir'))
