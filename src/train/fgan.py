@@ -87,6 +87,8 @@ def main(**kwargs):
 
     print('Initializing env..')
     env = gym.make(env_name)
+    if seed is not None:
+        env.seed(int(seed))
 
     print('Initializing agent and models..')
     agent = agents.fGANDiscreteStaticAgent(

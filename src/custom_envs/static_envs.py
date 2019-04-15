@@ -54,6 +54,10 @@ class DiscreteStaticEnv(StaticEnv):
 
         self.free_pos = [tuple(self.state_to_pos[id]) for id in self.free_states]
 
+    def seed(self, seed=None):
+        self.action_space.seed(seed)
+        self.observation_space.seed(seed)
+
     def reset(self, state=None, pos=None):
         if state is not None:
             assert state in self.free_states
