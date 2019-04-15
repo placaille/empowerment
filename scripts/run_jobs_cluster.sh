@@ -79,11 +79,12 @@ source activate augusta
 #SBATCH --output=$job_out_dir/slurm-%j.out
 #SBATCH --error=$job_out_dir/slurm-%j.err
 #SBATCH --time=7:00:00
-#SBATCH --mem=4G
-#SBATCH -c 1
-#SBATCH --qos=low
+#SBATCH --mem=8G
+#SBATCH -c 2
+#SBATCH --gres=gpu
+#SBATCH --qos=unkillable
 #SBATCH --requeue
-#SBATCH --exclude=leto52,leto20,leto12
+#SBATCH --exclude=leto52,leto20,leto12,leto15
 $other_cmds
 python -u $job_python_file $python_args" > $job_file
 
