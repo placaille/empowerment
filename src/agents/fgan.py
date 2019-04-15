@@ -61,15 +61,24 @@ class fGANDiscreteStaticAgent(object):
         self.model_score = models.MLPShallow(2*observation_size+len(self.actions_seqs), hidden_size, 1)
         self.model_score.to(self.device)
 
+        self.model_emp = models.LinearModel(observation_size, hidden_size, 1)
+        self.model_emp.to(self.device)
+
         # optim score
         if score_optim_name == 'adam':
             self.optim_score = optim.Adam(self.model_score.parameters(),
                 lr=score_lr, weight_decay=score_weight_decay)
+            self.optim_emp = optim.Adam(self.model_emp.parameters(),
+                lr=score_lr, weight_decay=score_weight_decay)
         elif score_optim_name == 'sgd':
             self.optim_score = optim.SGD(self.model_score.parameters(),
                 lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
+            self.optim_emp = optim.SGD(self.model_emp.parameters(),
+                lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
         elif score_optim_name == 'rmsprop':
             self.optim_score = optim.RMSprop(self.model_score.parameters(),
+                lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
+            self.optim_emp = optim.RMSprop(self.model_emp.parameters(),
                 lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
 
         self.obj = self.fgan.discr_obj  # returns averything to compute empowerment
@@ -176,7 +185,7 @@ class fGANDiscreteStaticAgent(object):
         }
         return out
 
-    def train_score_step(self):
+    def train_score_step(self, iter):
 
         batch = self.memory.sample_data(self.max_batch_size)
 
@@ -196,20 +205,30 @@ class fGANDiscreteStaticAgent(object):
         loss_score_marginal = score_marg.mean()
         loss_score_total = loss_score_joint + loss_score_marginal
 
+        # loss for emp predict
+        pred_emp = self.model_emp(obs_start)
+        trgt_emp = (self.fgan.constant + score_joint - score_marg)
+        loss_emp = F.mse_loss(pred_emp, trgt_emp.detach(), reduction='none').mean()
+
+        loss_total = loss_score_total + loss_emp
+
         self.optim_score.zero_grad()
-        loss_score_total.backward()
+        self.optim_emp.zero_grad()
+        loss_total.backward()
         self.optim_score.step()
+        self.optim_emp.step()
 
         score_loss = {
             'total': loss_score_total.item(),
             'joint': loss_score_joint.item(),
             'marginal': loss_score_marginal.item(),
+            'emp': loss_emp.item(),
         }
         return score_loss
 
-    def train_step(self, env):
+    def train_step(self, env, iter):
 
-        score_loss = self.train_score_step()
+        score_loss = self.train_score_step(iter)
         grad_source_distr = self.train_source_distr_step(env)
 
         out = {
@@ -218,29 +237,27 @@ class fGANDiscreteStaticAgent(object):
         }
         return out
 
+    @torch.no_grad()
     def compute_empowerment_map(self, env, num_sample=1000):
         self.eval_mode()
-        empowerment_states = utils.get_empowerment_values(
-            agent=self,
-            env=env,
-            num_sample=num_sample,
-        )
-        self.empowerment_values = empowerment_states
+        obs_start = torch.eye(len(env.free_pos)).to(self.device)
+        empowerment_states = self.model_emp(obs_start).squeeze(1)
         self.train_mode()
         states_i, states_j = zip(*env.free_pos)
+        self.empowerment_values = empowerment_states.data
 
         # init map value to avg empowerment to simplify color mapping later
         empowerment_map = np.full(env.grid.shape, empowerment_states.mean().item(), dtype=np.float32)
         empowerment_map[states_i, states_j] = empowerment_states.cpu().numpy()
         return empowerment_map, empowerment_states.mean().item()
 
+    @torch.no_grad()
     def compute_entropy_map(self, env):
         self.eval_mode()
         obs = torch.eye(len(env.free_states))
-        with torch.no_grad():
-            log_probs = F.log_softmax(self.model_source_distr(obs.to(self.device)), dim=-1)
-            distr = Categorical(logits=log_probs)
-            entropy = distr.entropy().cpu().numpy()
+        log_probs = F.log_softmax(self.model_source_distr(obs.to(self.device)), dim=-1)
+        distr = Categorical(logits=log_probs)
+        entropy = distr.entropy().cpu().numpy()
 
         self.train_mode()
         states_i, states_j = zip(*env.free_pos)

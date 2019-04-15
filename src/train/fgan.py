@@ -110,6 +110,7 @@ def main(**kwargs):
         'score_total': 0,
         'score_joint': 0,
         'score_marginal': 0,
+        'emp_total': 0,
     }
     start = timer()
 
@@ -121,30 +122,33 @@ def main(**kwargs):
     print('Starting training..')
     for iter in count(start=1):
 
-        train_out = agent.train_step(env)
+        train_out = agent.train_step(env, iter)
 
         cumul_loss['score_total'] += train_out['score_loss']['total']
         cumul_loss['score_joint'] += train_out['score_loss']['joint']
         cumul_loss['score_marginal'] += train_out['score_loss']['marginal']
+        cumul_loss['emp_total'] += train_out['score_loss']['emp']
 
         # log stuff
         if iter % iter_per_eval == 0 or iter == max_iter:
             avg_loss_score_total = cumul_loss['score_total'] / iter_per_eval
             avg_loss_score_joint = cumul_loss['score_joint'] / iter_per_eval
             avg_loss_score_marginal = cumul_loss['score_marginal'] / iter_per_eval
+            avg_loss_emp = cumul_loss['emp_total'] / iter_per_eval
 
             empowerment_map, emp_mean = agent.compute_empowerment_map(env, kwargs.get('samples_for_eval'))
             entropy_map, entr_mean = agent.compute_entropy_map(env)
 
             env_step_tag = '{}-{}-steps'.format(env_name, num_steps)
             tag_emp = 'emp_{}'.format(env_step_tag)
+            tag_pred = 'emp_pred_{}'.format(env_step_tag)
             tag_ent = 'entropy_{}'.format(env_step_tag)
             agent.save_models(tag=tag_emp+'_', out_dir=os.path.join(log_dir, 'models'))
             utils.log_value_map(writer, empowerment_map,
                                       mask=env.grid != env.free,
-                                      tag=tag_emp,
+                                      tag=tag_pred,
                                       global_step=iter,
-                                      file_name=os.path.join(log_dir, 'maps', tag_emp))
+                                      file_name=os.path.join(log_dir, 'maps', tag_pred))
             utils.log_value_map(writer, entropy_map,
                                       mask=env.grid != env.free,
                                       tag=tag_ent,
@@ -153,6 +157,7 @@ def main(**kwargs):
             writer.add_scalar('loss-{}/score-total'.format(env_step_tag), avg_loss_score_total, iter)
             writer.add_scalar('loss-{}/score-joint'.format(env_step_tag), avg_loss_score_joint, iter)
             writer.add_scalar('loss-{}/score-marginal'.format(env_step_tag), avg_loss_score_marginal, iter)
+            writer.add_scalar('loss-{}/emp-total'.format(env_step_tag), avg_loss_emp, iter)
             writer.add_scalar('empowerment-{}/min'.format(env_step_tag), empowerment_map.min(), iter)
             writer.add_scalar('empowerment-{}/max'.format(env_step_tag), empowerment_map.max(), iter)
             writer.add_scalar('empowerment-{}/mean'.format(env_step_tag), emp_mean, iter)
@@ -160,9 +165,10 @@ def main(**kwargs):
             writer.add_scalar('entropy-{}/max'.format(env_step_tag), entropy_map.max(), iter)
             writer.add_scalar('entropy-{}/mean'.format(env_step_tag), entr_mean, iter)
 
-            print('iter {:8d} - loss {:5.3f} - empowerment {:6.4f} - entropy {:5.3f} - {:4.1f}s'.format(
+            print('iter {:8d} - loss {:5.3f}/{:5.3f} - empowerment {:6.4f} - entropy {:5.3f} - {:4.1f}s'.format(
                 iter,
                 avg_loss_score_total,
+                avg_loss_emp,
                 emp_mean,
                 entr_mean,
                 timer() - start,
@@ -170,6 +176,7 @@ def main(**kwargs):
             cumul_loss['score_total'] = 0
             cumul_loss['score_joint'] = 0
             cumul_loss['score_marginal'] = 0
+            cumul_loss['emp_total'] = 0
             start = timer()
 
         if iter >= max_iter:
