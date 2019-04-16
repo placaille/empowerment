@@ -32,10 +32,10 @@ class fGANDiscreteStaticAgent(object):
         score_lr = kwargs.get('score_lr')
         score_momentum = kwargs.get('score_momentum')
         score_weight_decay = kwargs.get('score_weight_decay')
-        source_distr_optim_name = kwargs.get('source_distr_optim_name')
-        source_distr_lr = kwargs.get('source_distr_lr')
-        source_distr_momentum = kwargs.get('source_distr_momentum')
-        source_distr_weight_decay = kwargs.get('source_distr_weight_decay')
+        policy_optim_name = kwargs.get('policy_optim_name')
+        policy_lr = kwargs.get('policy_lr')
+        policy_momentum = kwargs.get('policy_momentum')
+        policy_weight_decay = kwargs.get('policy_weight_decay')
 
         mem_size = kwargs.get('memory_size')
         mem_fields = kwargs.get('mem_fields')
@@ -58,45 +58,36 @@ class fGANDiscreteStaticAgent(object):
         self.empowerment_values = torch.zeros(observation_size).to(self.device)
 
         # model used to compute score (or marginals/joint) (s`+a, conditioned on s)
-        self.model_score = models.MLPShallow(2*observation_size+len(self.actions_seqs), hidden_size, 1)
+        self.model_score = models.MLP(2*observation_size + self.num_actions_seqs, hidden_size, 1)
         self.model_score.to(self.device)
-
-        self.model_emp = models.LinearModel(observation_size, hidden_size, 1)
-        self.model_emp.to(self.device)
 
         # optim score
         if score_optim_name == 'adam':
             self.optim_score = optim.Adam(self.model_score.parameters(),
                 lr=score_lr, weight_decay=score_weight_decay)
-            self.optim_emp = optim.Adam(self.model_emp.parameters(),
-                lr=score_lr, weight_decay=score_weight_decay)
         elif score_optim_name == 'sgd':
             self.optim_score = optim.SGD(self.model_score.parameters(),
                 lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
-            self.optim_emp = optim.SGD(self.model_emp.parameters(),
-                lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
         elif score_optim_name == 'rmsprop':
             self.optim_score = optim.RMSprop(self.model_score.parameters(),
-                lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
-            self.optim_emp = optim.RMSprop(self.model_emp.parameters(),
                 lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
 
         self.obj = self.fgan.discr_obj  # returns averything to compute empowerment
 
         # source distribution/generator/policy
-        self.model_source_distr = models.LinearModel(observation_size, hidden_size, len(self.actions_seqs))
-        self.model_source_distr.to(self.device)
+        self.model_policy = models.MLPShallowSigmoid(observation_size, hidden_size, self.num_actions_seqs + 1)
+        self.model_policy.to(self.device)
 
         # optim source distr
-        if source_distr_optim_name == 'adam':
-            self.optim_source_distr = optim.Adam(self.model_source_distr.parameters(),
-            lr=source_distr_lr, weight_decay=source_distr_weight_decay)
-        elif source_distr_optim_name == 'sgd':
-            self.optim_source_distr = optim.SGD(self.model_source_distr.parameters(),
-            lr=source_distr_lr, momentum=source_distr_momentum, weight_decay=source_distr_weight_decay)
-        elif source_distr_optim_name == 'rmsprop':
-            self.optim_source_distr = optim.RMSprop(self.model_source_distr.parameters(),
-            lr=source_distr_lr, momentum=source_distr_momentum, weight_decay=source_distr_weight_decay)
+        if policy_optim_name == 'adam':
+            self.optim_policy = optim.Adam(self.model_policy.parameters(),
+            lr=policy_lr, weight_decay=policy_weight_decay)
+        elif policy_optim_name == 'sgd':
+            self.optim_policy = optim.SGD(self.model_policy.parameters(),
+            lr=policy_lr, momentum=policy_momentum, weight_decay=policy_weight_decay)
+        elif policy_optim_name == 'rmsprop':
+            self.optim_policy = optim.RMSprop(self.model_policy.parameters(),
+            lr=policy_lr, momentum=policy_momentum, weight_decay=policy_weight_decay)
 
     def generate_rollouts(self, env, init_obs_all, actions_seqs, seq_onehots, add_to_memory=True):
 
@@ -123,7 +114,8 @@ class fGANDiscreteStaticAgent(object):
         assert isinstance(init_states, list)
 
         obs_start = torch.FloatTensor(init_states).to(self.device)  # (batch, dims)
-        seq_log_probs = F.log_softmax(self.model_source_distr(obs_start), dim=-1)  # (batch, dims)
+        logits, _ = self._model_policy(obs_start)
+        seq_log_probs = F.log_softmax(logits, dim=-1)  # (batch, dims)
         seq_distrs = Categorical(logits=seq_log_probs)
         seqs_sampled = torch.stack([seq_distrs.sample() for _ in range(num_rollouts)]).transpose(1, 0)
 
@@ -141,7 +133,7 @@ class fGANDiscreteStaticAgent(object):
 
         return seq_distrs, seqs_sampled, np.array(seq_onehots_all), np.array(obs_end_all)
 
-    def train_source_distr_step(self, env):
+    def train_policy_step(self, env):
 
         source_batch_size = int(self.max_batch_size)
         init_states = [env.reset() for _ in range(source_batch_size)]
@@ -175,9 +167,9 @@ class fGANDiscreteStaticAgent(object):
             grad_signal -= baseline.to(self.device)
         log_probs = seq_distrs.log_prob(seq_id_1)
 
-        self.optim_source_distr.zero_grad()
+        self.optim_policy.zero_grad()
         log_probs.backward(grad_signal.detach())
-        self.optim_source_distr.step()
+        self.optim_policy.step()
 
         # prep out
         out = {
@@ -206,17 +198,17 @@ class fGANDiscreteStaticAgent(object):
         loss_score_total = loss_score_joint + loss_score_marginal
 
         # loss for emp predict
-        pred_emp = self.model_emp(obs_start)
+        _, pred_emp = self._model_policy(obs_start)
         trgt_emp = (self.fgan.constant + score_joint - score_marg)
         loss_emp = F.mse_loss(pred_emp, trgt_emp.detach(), reduction='none').mean()
 
         loss_total = loss_score_total + loss_emp
 
         self.optim_score.zero_grad()
-        self.optim_emp.zero_grad()
+        self.optim_policy.zero_grad()
         loss_total.backward()
         self.optim_score.step()
-        self.optim_emp.step()
+        self.optim_policy.step()
 
         score_loss = {
             'total': loss_score_total.item(),
@@ -229,19 +221,23 @@ class fGANDiscreteStaticAgent(object):
     def train_step(self, env, iter):
 
         score_loss = self.train_score_step(iter)
-        grad_source_distr = self.train_source_distr_step(env)
+        grad_policy = self.train_policy_step(env)
 
         out = {
-            'grad_source_distr': grad_source_distr,
+            'grad_policy': grad_policy,
             'score_loss': score_loss,
         }
         return out
+
+    def _model_policy(self, obs):
+        return torch.split(self.model_policy(obs), [self.num_actions_seqs, 1], dim=-1)
 
     @torch.no_grad()
     def compute_empowerment_map(self, env, num_sample=1000):
         self.eval_mode()
         obs_start = torch.eye(len(env.free_pos)).to(self.device)
-        empowerment_states = self.model_emp(obs_start).squeeze(1)
+        _, pred_emp = self._model_policy(obs_start)
+        empowerment_states = pred_emp.squeeze(1)
         self.train_mode()
         states_i, states_j = zip(*env.free_pos)
         self.empowerment_values = empowerment_states.data
@@ -254,8 +250,9 @@ class fGANDiscreteStaticAgent(object):
     @torch.no_grad()
     def compute_entropy_map(self, env):
         self.eval_mode()
-        obs = torch.eye(len(env.free_states))
-        log_probs = F.log_softmax(self.model_source_distr(obs.to(self.device)), dim=-1)
+        obs = torch.eye(len(env.free_states)).to(self.device)
+        logits, _ = self._model_policy(obs)
+        log_probs = F.log_softmax(logits, dim=-1)
         distr = Categorical(logits=log_probs)
         entropy = distr.entropy().cpu().numpy()
 
@@ -267,12 +264,13 @@ class fGANDiscreteStaticAgent(object):
         entropy_map[states_i, states_j] = entropy
         return entropy_map, entropy.mean()
 
-    def sample_source_distr(self, obs):
+    def sample_policy(self, obs):
         if isinstance(obs, np.ndarray):
             if obs.ndim == 1:
                 obs = obs.reshape(1, -1)
             obs = torch.FloatTensor(obs).to(self.device)
-        seq_logits = F.log_softmax(self.model_source_distr(obs), dim=-1)
+        logits, _ = self._model_policy(obs)
+        seq_logits = F.log_softmax(logits, dim=-1)
         distr = Categorical(logits=seq_logits)
         action_ids = distr.sample()
         out = {
@@ -289,14 +287,14 @@ class fGANDiscreteStaticAgent(object):
 
     def eval_mode(self):
         self.model_score.eval()
-        self.model_source_distr.eval()
+        self.model_policy.eval()
 
     def train_mode(self):
         self.model_score.train()
-        self.model_source_distr.train()
+        self.model_policy.train()
 
     def save_models(self, tag, out_dir):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         self.model_score.save(os.path.join(out_dir, tag + 'score.pth'))
-        self.model_source_distr.save(os.path.join(out_dir, tag + 'source_distr.pth'))
+        self.model_policy.save(os.path.join(out_dir, tag + 'policy.pth'))
