@@ -32,26 +32,21 @@ import utils
 ]))
 @click.option('--diverg-name', default='js', type=click.Choice(['js', 'kl']))
 @click.option('--seed', default=None)
-@click.option('--score-optim-name', default='adam', type=click.Choice(['adam', 'sgd', 'rmsprop']))
-@click.option('--score-lr', default=0.0001, type=float)
-@click.option('--score-momentum', default=0.0, type=float)
-@click.option('--score-weight-decay', type=float, default=0)
-@click.option('--policy-optim-name', default='adam', type=click.Choice(['adam', 'sgd', 'rmsprop']))
-@click.option('--policy-lr', default=0.0001, type=float)
-@click.option('--policy-momentum', default=0.0, type=float)
-@click.option('--policy-weight-decay', type=float, default=0)
+@click.option('--optim-name', default='adam', type=click.Choice(['adam', 'sgd', 'rmsprop']))
+@click.option('--lr', default=0.0001, type=float)
+@click.option('--momentum', default=0.0, type=float)
+@click.option('--weight-decay', type=float, default=0)
 @click.option('--comment', type=str, default=None, help='Comment stored in the args')
 @click.option('--force-cpu', default=False, type=bool)
 @click.option('--num-steps', type=int, default=2, help='Num steps for empowerment')
 @click.option('--hidden-size', type=int, default=32)
 @click.option('--iter-per-eval', type=int, default=1000, help='Number of training iterations between evaluations')
+@click.option('--iter-per-train', type=int, default=100, help='Number of rollouts between training steps')
 @click.option('--iter-before-train', type=int, default=20000)
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--memory-size', type=int, default=100000)
-@click.option('--samples-for-grad', type=int, default=16)
-@click.option('--samples-for-eval', type=int, default=100)
 @click.option('--batch-size', type=int, default=128)
-@click.option('--use-baseline', type=bool, default=False)
+@click.option('--num-workers', type=int, default=1, help='Num workers (num different environments in parallel)')
 def main(**kwargs):
     pre_trained_dir = os.path.expanduser(kwargs.get('pre_trained_dir'))
     log_dir = os.path.expanduser(kwargs.get('log_dir'))
@@ -60,6 +55,7 @@ def main(**kwargs):
     seed = kwargs.get('seed')
     num_steps = kwargs.get('num_steps')
     iter_per_eval = kwargs.get('iter_per_eval')
+    iter_per_train = kwargs.get('iter_per_train')
     iter_before_train = kwargs.get('iter_before_train')
     max_iter = kwargs.get('max_iter')
 
@@ -122,12 +118,12 @@ def main(**kwargs):
     print('Starting training..')
     for iter in count(start=1):
 
-        train_out = agent.train_step(env, iter)
+        train_out = agent.train_step(env)
 
-        cumul_loss['score_total'] += train_out['score_loss']['total']
-        cumul_loss['score_joint'] += train_out['score_loss']['joint']
-        cumul_loss['score_marginal'] += train_out['score_loss']['marginal']
-        cumul_loss['emp_total'] += train_out['score_loss']['emp']
+        cumul_loss['score_total'] += train_out['score']['loss_total']
+        cumul_loss['score_joint'] += train_out['score']['loss_joint']
+        cumul_loss['score_marginal'] += train_out['score']['loss_marginal']
+        cumul_loss['emp_total'] += train_out['policy']['loss_emp']
 
         # log stuff
         if iter % iter_per_eval == 0 or iter == max_iter:

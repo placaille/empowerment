@@ -20,22 +20,16 @@ class fGANDiscreteStaticAgent(object):
         self.device = kwargs.get('device')
         self.divergence_name = kwargs.get('diverg_name')
         self.max_batch_size = kwargs.get('batch_size')
-        self.num_samples_grad = kwargs.get('num_samples_grad')
         self.actions = kwargs.get('actions')
-        self.use_baseline = kwargs.get('use_baseline')
 
         observation_size = kwargs.get('observation_size')
         hidden_size = kwargs.get('hidden_size')
 
         # optim config
-        score_optim_name = kwargs.get('score_optim_name')
-        score_lr = kwargs.get('score_lr')
-        score_momentum = kwargs.get('score_momentum')
-        score_weight_decay = kwargs.get('score_weight_decay')
-        policy_optim_name = kwargs.get('policy_optim_name')
-        policy_lr = kwargs.get('policy_lr')
-        policy_momentum = kwargs.get('policy_momentum')
-        policy_weight_decay = kwargs.get('policy_weight_decay')
+        optim_name = kwargs.get('optim_name')
+        lr = kwargs.get('lr')
+        momentum = kwargs.get('momentum')
+        weight_decay = kwargs.get('weight_decay')
 
         mem_size = kwargs.get('memory_size')
         mem_fields = kwargs.get('mem_fields')
@@ -58,174 +52,139 @@ class fGANDiscreteStaticAgent(object):
         self.empowerment_values = torch.zeros(observation_size).to(self.device)
 
         # model used to compute score (or marginals/joint) (s`+a, conditioned on s)
-        self.model_score = models.MLP(2*observation_size + self.num_actions_seqs, hidden_size, 1)
+        self.model_score = models.MLPShallow(2*observation_size + self.num_actions_seqs, hidden_size, 1)
         self.model_score.to(self.device)
-
-        # optim score
-        if score_optim_name == 'adam':
-            self.optim_score = optim.Adam(self.model_score.parameters(),
-                lr=score_lr, weight_decay=score_weight_decay)
-        elif score_optim_name == 'sgd':
-            self.optim_score = optim.SGD(self.model_score.parameters(),
-                lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
-        elif score_optim_name == 'rmsprop':
-            self.optim_score = optim.RMSprop(self.model_score.parameters(),
-                lr=score_lr, momentum=score_momentum, weight_decay=score_weight_decay)
 
         self.obj = self.fgan.discr_obj  # returns averything to compute empowerment
 
         # source distribution/generator/policy
-        self.model_policy = models.MLPShallowSigmoid(observation_size, hidden_size, self.num_actions_seqs + 1)
+        self.model_policy = models.LinearModel(observation_size, hidden_size, self.num_actions_seqs + 1)
         self.model_policy.to(self.device)
 
-        # optim source distr
-        if policy_optim_name == 'adam':
-            self.optim_policy = optim.Adam(self.model_policy.parameters(),
-            lr=policy_lr, weight_decay=policy_weight_decay)
-        elif policy_optim_name == 'sgd':
-            self.optim_policy = optim.SGD(self.model_policy.parameters(),
-            lr=policy_lr, momentum=policy_momentum, weight_decay=policy_weight_decay)
-        elif policy_optim_name == 'rmsprop':
-            self.optim_policy = optim.RMSprop(self.model_policy.parameters(),
-            lr=policy_lr, momentum=policy_momentum, weight_decay=policy_weight_decay)
-
-    def generate_rollouts(self, env, init_obs_all, actions_seqs, seq_onehots, add_to_memory=True):
-
-        end_obs_all = []
-        for (init_obs, action_seq, onehot) in zip(init_obs_all, actions_seqs, seq_onehots):
-            env.reset(state=init_obs.argmax(-1))
-            for action in action_seq:
-                obs = env.step(action)
-
-            end_obs_all.append(obs)
-            if add_to_memory:
-                self.memory.add_data(
-                    obs_start=init_obs,
-                    obs_end=obs,
-                    act_seq=action_seq,
-                    seq_onehot=onehot,
-                )
-        return np.array(end_obs_all)
+        # optim
+        params = list(self.model_score.parameters()) + list(self.model_policy.parameters())
+        if optim_name == 'adam':
+            self.optim = optim.Adam(params, lr=lr, weight_decay=weight_decay)
+        elif optim_name == 'sgd':
+            self.optim = optim.SGD(params, lr=lr, momentum=momentum, weight_decay=weight_decay)
+        elif optim_name == 'rmsprop':
+            self.optim = optim.RMSprop(params, lr=lr, momentum=momentum, weight_decay=weight_decay)
 
     def generate_on_policy_rollouts(self, env, init_states, num_rollouts=1, add_to_memory=True):
         """
         returns (log_probs, samples, onehots, obs_end)
         """
-        assert isinstance(init_states, list)
-
+        assert isinstance(init_states, list) or isinstance(init_states, tuple)
         obs_start = torch.FloatTensor(init_states).to(self.device)  # (batch, dims)
         logits, _ = self._model_policy(obs_start)
         seq_log_probs = F.log_softmax(logits, dim=-1)  # (batch, dims)
         seq_distrs = Categorical(logits=seq_log_probs)
-        seqs_sampled = torch.stack([seq_distrs.sample() for _ in range(num_rollouts)]).transpose(1, 0)
 
-        seq_onehots_all = []
-        obs_end_all = []
-        for (init_state, seq_sampled) in zip(init_states, seqs_sampled):
-            action_seqs = [self.actions_lists[seq_id.item()] for seq_id in seq_sampled]
-            seq_onehots = self._convert_seq_id_to_onehot(seq_sampled.cpu().numpy())
-            init_state = [init_state for _ in range(num_rollouts)]
+        # prep for acting
+        b, n, s, a = obs_start.shape[0], num_rollouts, obs_start.shape[-1], self.num_actions_seqs
+        state_ids = obs_start.argmax(-1).cpu().numpy()  # (b)
 
-            obs_end = self.generate_rollouts(env, init_state, action_seqs, seq_onehots, add_to_memory)
+        seqs_sampled = np.empty((n, b), dtype=np.long)
+        for i in range(n):
+            seqs_sampled[i] = seq_distrs.sample().cpu().numpy()
 
-            seq_onehots_all.append(seq_onehots)
-            obs_end_all.append(obs_end)
+        seq_onehot_all = self._convert_seq_id_to_onehot(seqs_sampled)  # (n, b, a)
 
-        return seq_distrs, seqs_sampled, np.array(seq_onehots_all), np.array(obs_end_all)
+        obs_end_all = np.empty((n, b, s))
+        for i in range(n):
+            for j in range(b):
+                action_seq = self.actions_lists[seqs_sampled[i, j]]
 
-    def train_policy_step(self, env):
+                env.reset(state=state_ids[j])
+                for action in action_seq:
+                    obs = env.step(action)
 
-        source_batch_size = int(self.max_batch_size)
-        init_states = [env.reset() for _ in range(source_batch_size)]
+                obs_end_all[i, j] = obs
+                if add_to_memory:
+                    self.memory.add_data(
+                        obs_start=init_states[j],
+                        obs_end=obs.copy(),
+                        act_seq=action_seq,
+                        seq_onehot=seq_onehot_all[i, j],
+                    )
 
-        out = self.generate_on_policy_rollouts(env, init_states, num_rollouts=2)
+        return seq_distrs, seqs_sampled, seq_onehot_all, obs_end_all
+
+    def train_step(self, env):
+
+        # import pdb;pdb.set_trace()
+        batch = self.memory.sample_data(self.max_batch_size)
+        obs_start = torch.FloatTensor(batch.obs_start).to(self.device)
+        b_size = obs_start.shape[0]
+
+        # score network
+        obs_end = torch.FloatTensor(batch.obs_end).to(self.device)
+        seq_onehot = torch.FloatTensor(batch.seq_onehot).to(self.device)
+        seq_onehot_shfld = seq_onehot[torch.randperm(b_size)]
+
+        stack_joint_s = torch.cat([obs_start, obs_end, seq_onehot], dim=-1)
+        stack_marg_s = torch.cat([obs_start, obs_end, seq_onehot_shfld], dim=-1)
+
+        score_joint_s = self.fgan.pos_score(self.model_score(stack_joint_s))
+        score_marg_s = self.fgan.neg_score(self.model_score(stack_marg_s))
+
+        # loss for score (inverse sign for gradient descent)
+        loss_score_joint = - score_joint_s.mean()
+        loss_score_marginal = score_marg_s.mean()
+        loss_score_total = loss_score_joint + loss_score_marginal
+
+        _, predict_emp = self._model_policy(obs_start)
+        target_emp = self.fgan.constant + score_joint_s - score_marg_s
+
+        # loss empowerment value
+        loss_emp = F.mse_loss(predict_emp, target_emp.detach(), reduction='none').mean()
+
+        # policy network
+        init_states = [env.reset() for _ in range(b_size)]
+        out = self.generate_on_policy_rollouts(env, init_states, num_rollouts=2, add_to_memory=False)
         seq_distrs, seq_sampled, seq_onehots_all, obs_end_all = out
 
-        seq_id_1, seq_id_2 = seq_sampled.transpose(1, 0)
-        seq_onehot_1, seq_onehot_2 = seq_onehots_all.transpose(1, 0, 2)
-        obs_end_1, obs_end_2 = obs_end_all.transpose(1, 0, 2)
+        seq_id_1, seq_id_2 = seq_sampled
+        seq_onehot_1, seq_onehot_2 = seq_onehots_all
+        obs_end_1, obs_end_2 = obs_end_all
 
-        obs_start = torch.FloatTensor(init_states).to(self.device)
+        seq_id_1 = torch.LongTensor(seq_id_1).to(self.device)
         seq_onehot_1 = torch.FloatTensor(seq_onehot_1).to(self.device)
         seq_onehot_2 = torch.FloatTensor(seq_onehot_2).to(self.device)
         obs_end_1 = torch.FloatTensor(obs_end_1).to(self.device)
         obs_end_2 = torch.FloatTensor(obs_end_2).to(self.device)
 
         # combine into respective stacks
-        stack_joint = torch.cat([obs_start, obs_end_1, seq_onehot_1], dim=-1)
+        stack_joint_p = torch.cat([obs_start, obs_end_1, seq_onehot_1], dim=-1)
         stack_marg_1 = torch.cat([obs_start, obs_end_2, seq_onehot_1], dim=-1)
         stack_marg_2 = torch.cat([obs_start, obs_end_1, seq_onehot_2], dim=-1)
 
-        score_joint = self.fgan.pos_score(self.model_score(stack_joint))
+        score_joint_p = self.fgan.pos_score(self.model_score(stack_joint_p))
         score_marg_1 = self.fgan.neg_score(self.model_score(stack_marg_1))
         score_marg_2 = self.fgan.neg_score(self.model_score(stack_marg_2))
 
         # compute gradient source (inverse sign for gradient descent)
-        grad_signal = (score_marg_1 + score_marg_2 - score_joint).squeeze(1) / source_batch_size
-        if self.use_baseline:
-            baseline = self.empowerment_values[obs_start.argmax(-1)]
-            grad_signal -= baseline.to(self.device)
+        pol_grad_signal = (score_marg_1 + score_marg_2 - score_joint_p).squeeze(1) / b_size
         log_probs = seq_distrs.log_prob(seq_id_1)
 
-        self.optim_policy.zero_grad()
-        log_probs.backward(grad_signal.detach())
-        self.optim_policy.step()
+        # setup for single backward pass
+        tensors = [log_probs] + [loss_score_total + loss_emp]
+        grad_tensors = [pol_grad_signal] + [torch.ones(1).to(self.device)]
 
-        # prep out
-        out = {
-            'grad_signal_mean': grad_signal.mean()
-        }
-        return out
-
-    def train_score_step(self, iter):
-
-        batch = self.memory.sample_data(self.max_batch_size)
-
-        obs_start = torch.FloatTensor(batch.obs_start).to(self.device)
-        obs_end_1 = torch.FloatTensor(batch.obs_end).to(self.device)
-        seq_onehot_1 = torch.FloatTensor(batch.seq_onehot).to(self.device)
-        seq_onehot_2 = seq_onehot_1[torch.randperm(seq_onehot_1.shape[0])]
-
-        stack_joint = torch.cat([obs_start, obs_end_1, seq_onehot_1], dim=-1)
-        stack_marg = torch.cat([obs_start, obs_end_1, seq_onehot_2], dim=-1)
-
-        score_joint = self.fgan.pos_score(self.model_score(stack_joint))
-        score_marg = self.fgan.neg_score(self.model_score(stack_marg))
-
-        # loss for score (inverse sign for gradient descent)
-        loss_score_joint = - score_joint.mean()
-        loss_score_marginal = score_marg.mean()
-        loss_score_total = loss_score_joint + loss_score_marginal
-
-        # loss for emp predict
-        _, pred_emp = self._model_policy(obs_start)
-        trgt_emp = (self.fgan.constant + score_joint - score_marg)
-        loss_emp = F.mse_loss(pred_emp, trgt_emp.detach(), reduction='none').mean()
-
-        loss_total = loss_score_total + loss_emp
-
-        self.optim_score.zero_grad()
-        self.optim_policy.zero_grad()
-        loss_total.backward()
-        self.optim_score.step()
-        self.optim_policy.step()
-
-        score_loss = {
-            'total': loss_score_total.item(),
-            'joint': loss_score_joint.item(),
-            'marginal': loss_score_marginal.item(),
-            'emp': loss_emp.item(),
-        }
-        return score_loss
-
-    def train_step(self, env, iter):
-
-        score_loss = self.train_score_step(iter)
-        grad_policy = self.train_policy_step(env)
+        self.optim.zero_grad()
+        torch.autograd.backward(tensors, grad_tensors)
+        self.optim.step()
 
         out = {
-            'grad_policy': grad_policy,
-            'score_loss': score_loss,
+            'score':{
+                'loss_total': loss_score_total.item(),
+                'loss_joint': loss_score_joint.item(),
+                'loss_marginal': loss_score_marginal.item(),
+            },
+            'policy': {
+                'grad_signal_mean': pol_grad_signal.mean(),
+                'loss_emp': loss_emp.item(),
+            }
         }
         return out
 
