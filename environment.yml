@@ -9,7 +9,7 @@ dependencies:
   - pyzmq
   - torchvision
   - pip:
-    - gym
+    - gym==0.11
     - pyyaml
     - click
     - ipython
