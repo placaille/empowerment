@@ -114,16 +114,16 @@ class fGANDiscreteStaticAgent(object):
 
         # import pdb;pdb.set_trace()
         batch = self.memory.sample_data(self.max_batch_size)
-        obs_start = torch.FloatTensor(batch.obs_start).to(self.device)
-        b_size = obs_start.shape[0]
+        obs_start_s = torch.FloatTensor(batch.obs_start).to(self.device)
+        b_size = obs_start_s.shape[0]
 
         # score network
-        obs_end = torch.FloatTensor(batch.obs_end).to(self.device)
-        seq_onehot = torch.FloatTensor(batch.seq_onehot).to(self.device)
-        seq_onehot_shfld = seq_onehot[torch.randperm(b_size)]
+        obs_end_s = torch.FloatTensor(batch.obs_end).to(self.device)
+        seq_onehot_s = torch.FloatTensor(batch.seq_onehot).to(self.device)
+        seq_onehot_s_shfld = seq_onehot_s[torch.randperm(b_size)]
 
-        stack_joint_s = torch.cat([obs_start, obs_end, seq_onehot], dim=-1)
-        stack_marg_s = torch.cat([obs_start, obs_end, seq_onehot_shfld], dim=-1)
+        stack_joint_s = torch.cat([obs_start_s, obs_end_s, seq_onehot_s], dim=-1)
+        stack_marg_s = torch.cat([obs_start_s, obs_end_s, seq_onehot_s_shfld], dim=-1)
 
         score_joint_s = self.fgan.pos_score(self.model_score(stack_joint_s))
         score_marg_s = self.fgan.neg_score(self.model_score(stack_marg_s))
@@ -133,7 +133,7 @@ class fGANDiscreteStaticAgent(object):
         loss_score_marginal = score_marg_s.mean()
         loss_score_total = loss_score_joint + loss_score_marginal
 
-        _, predict_emp = self._model_policy(obs_start)
+        _, predict_emp = self._model_policy(obs_start_s)
         target_emp = self.fgan.constant + score_joint_s - score_marg_s
 
         # loss empowerment value
@@ -148,6 +148,7 @@ class fGANDiscreteStaticAgent(object):
         seq_onehot_1, seq_onehot_2 = seq_onehots_all
         obs_end_1, obs_end_2 = obs_end_all
 
+        obs_start_p = torch.FloatTensor(init_states).to(self.device)
         seq_id_1 = torch.LongTensor(seq_id_1).to(self.device)
         seq_onehot_1 = torch.FloatTensor(seq_onehot_1).to(self.device)
         seq_onehot_2 = torch.FloatTensor(seq_onehot_2).to(self.device)
@@ -155,9 +156,9 @@ class fGANDiscreteStaticAgent(object):
         obs_end_2 = torch.FloatTensor(obs_end_2).to(self.device)
 
         # combine into respective stacks
-        stack_joint_p = torch.cat([obs_start, obs_end_1, seq_onehot_1], dim=-1)
-        stack_marg_1 = torch.cat([obs_start, obs_end_2, seq_onehot_1], dim=-1)
-        stack_marg_2 = torch.cat([obs_start, obs_end_1, seq_onehot_2], dim=-1)
+        stack_joint_p = torch.cat([obs_start_p, obs_end_1, seq_onehot_1], dim=-1)
+        stack_marg_1 = torch.cat([obs_start_p, obs_end_2, seq_onehot_1], dim=-1)
+        stack_marg_2 = torch.cat([obs_start_p, obs_end_1, seq_onehot_2], dim=-1)
 
         score_joint_p = self.fgan.pos_score(self.model_score(stack_joint_p))
         score_marg_1 = self.fgan.neg_score(self.model_score(stack_marg_1))
