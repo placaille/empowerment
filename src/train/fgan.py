@@ -107,6 +107,7 @@ def main(**kwargs):
         'score_joint': 0,
         'score_marginal': 0,
         'emp_total': 0,
+        'policy_total': 0,
     }
     start = timer()
 
@@ -123,7 +124,8 @@ def main(**kwargs):
         cumul_loss['score_total'] += train_out['score']['loss_total']
         cumul_loss['score_joint'] += train_out['score']['loss_joint']
         cumul_loss['score_marginal'] += train_out['score']['loss_marginal']
-        cumul_loss['emp_total'] += train_out['policy']['loss_emp']
+        cumul_loss['emp_total'] += train_out['emp']['loss_total']
+        cumul_loss['policy_total'] += train_out['policy']['loss_total']
 
         # log stuff
         if iter % iter_per_eval == 0 or iter == max_iter:
@@ -131,6 +133,7 @@ def main(**kwargs):
             avg_loss_score_joint = cumul_loss['score_joint'] / iter_per_eval
             avg_loss_score_marginal = cumul_loss['score_marginal'] / iter_per_eval
             avg_loss_emp = cumul_loss['emp_total'] / iter_per_eval
+            avg_loss_policy = cumul_loss['policy_total'] / iter_per_eval
 
             empowerment_map, emp_mean = agent.compute_empowerment_map(env, kwargs.get('samples_for_eval'))
             entropy_map, entr_mean = agent.compute_entropy_map(env)
@@ -154,6 +157,7 @@ def main(**kwargs):
             writer.add_scalar('loss-{}/score-joint'.format(env_step_tag), avg_loss_score_joint, iter)
             writer.add_scalar('loss-{}/score-marginal'.format(env_step_tag), avg_loss_score_marginal, iter)
             writer.add_scalar('loss-{}/emp-total'.format(env_step_tag), avg_loss_emp, iter)
+            writer.add_scalar('loss-{}/policy-total'.format(env_step_tag), avg_loss_policy, iter)
             writer.add_scalar('empowerment-{}/min'.format(env_step_tag), empowerment_map.min(), iter)
             writer.add_scalar('empowerment-{}/max'.format(env_step_tag), empowerment_map.max(), iter)
             writer.add_scalar('empowerment-{}/mean'.format(env_step_tag), emp_mean, iter)
@@ -161,10 +165,11 @@ def main(**kwargs):
             writer.add_scalar('entropy-{}/max'.format(env_step_tag), entropy_map.max(), iter)
             writer.add_scalar('entropy-{}/mean'.format(env_step_tag), entr_mean, iter)
 
-            print('iter {:8d} - loss {:5.3f}/{:5.3f} - empowerment {:6.4f} - entropy {:5.3f} - {:4.1f}s'.format(
+            print('iter {:8d} - loss s/e/p {:5.3f}/{:5.3f}/{:5.3f} - emp {:5.3f} - entr {:5.3f} - {:4.1f}s'.format(
                 iter,
                 avg_loss_score_total,
                 avg_loss_emp,
+                avg_loss_policy,
                 emp_mean,
                 entr_mean,
                 timer() - start,
@@ -173,6 +178,7 @@ def main(**kwargs):
             cumul_loss['score_joint'] = 0
             cumul_loss['score_marginal'] = 0
             cumul_loss['emp_total'] = 0
+            cumul_loss['policy_total'] = 0
             start = timer()
 
         if iter >= max_iter:

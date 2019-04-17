@@ -112,7 +112,6 @@ class fGANDiscreteStaticAgent(object):
 
     def train_step(self, env):
 
-        # import pdb;pdb.set_trace()
         batch = self.memory.sample_data(self.max_batch_size)
         obs_start_s = torch.FloatTensor(batch.obs_start).to(self.device)
         b_size = obs_start_s.shape[0]
@@ -168,12 +167,18 @@ class fGANDiscreteStaticAgent(object):
         pol_grad_signal = (score_marg_1 + score_marg_2 - score_joint_p).squeeze(1) / b_size
         log_probs = seq_distrs.log_prob(seq_id_1)
 
+        # element wise product and sum gradients (equivalent to doing dot product)
+        loss_policy = torch.dot(log_probs, pol_grad_signal.detach())
+
+        # combine all and do backward
+        loss_total = loss_score_total + loss_emp + loss_policy
+
         # setup for single backward pass
-        tensors = [log_probs] + [loss_score_total + loss_emp]
-        grad_tensors = [pol_grad_signal] + [torch.ones(1).to(self.device)]
+        # tensors = [log_probs] + [loss_score_total + loss_emp]
+        # grad_tensors = [pol_grad_signal.detach()] + [torch.ones(1).to(self.device)]
 
         self.optim.zero_grad()
-        torch.autograd.backward(tensors, grad_tensors)
+        loss_total.backward()
         self.optim.step()
 
         out = {
@@ -183,8 +188,10 @@ class fGANDiscreteStaticAgent(object):
                 'loss_marginal': loss_score_marginal.item(),
             },
             'policy': {
-                'grad_signal_mean': pol_grad_signal.mean(),
-                'loss_emp': loss_emp.item(),
+                'loss_total': loss_policy.item(),
+            },
+            'emp': {
+                'loss_total': loss_emp.item()
             }
         }
         return out
