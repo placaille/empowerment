@@ -21,6 +21,7 @@ class fGANDiscreteStaticAgent(object):
         self.divergence_name = kwargs.get('diverg_name')
         self.max_batch_size = kwargs.get('batch_size')
         self.actions = kwargs.get('actions')
+        self.samples_for_grad = kwargs.get('samples_for_grad')
 
         observation_size = kwargs.get('observation_size')
         hidden_size = kwargs.get('hidden_size')
@@ -140,7 +141,7 @@ class fGANDiscreteStaticAgent(object):
 
         # policy network
         init_states = [env.reset() for _ in range(b_size)]
-        out = self.generate_on_policy_rollouts(env, init_states, num_rollouts=2, add_to_memory=False)
+        out = self.generate_on_policy_rollouts(env, init_states, num_rollouts=2)
         seq_distrs, seq_sampled, seq_onehots_all, obs_end_all = out
 
         seq_id_1, seq_id_2 = seq_sampled

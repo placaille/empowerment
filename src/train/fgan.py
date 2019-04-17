@@ -46,7 +46,7 @@ import utils
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--batch-size', type=int, default=128)
-@click.option('--num-workers', type=int, default=1, help='Num workers (num different environments in parallel)')
+@click.option('--samples-for-grad', type=int, default=1, help='Num samples for inner expectations')
 def main(**kwargs):
     pre_trained_dir = os.path.expanduser(kwargs.get('pre_trained_dir'))
     log_dir = os.path.expanduser(kwargs.get('log_dir'))
