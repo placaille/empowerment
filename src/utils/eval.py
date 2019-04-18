@@ -42,17 +42,15 @@ def get_empowerment_values(agent, env, num_sample=1000):
             logits_joint = agent.model_score(stack_joint)
             logits_marginal = agent.model_score(stack_marginal)
 
-            constant, scores_joint, scores_marginal = agent.obj(logits_joint, logits_marginal)
+            scores_joint, scores_marginal = agent.obj(logits_joint, logits_marginal)
             if i == 0:
-                constant_sum = constant.data.sum()
                 scores_joint_sum = scores_joint.data.sum()
                 scores_marginal_sum = scores_marginal.data.sum()
             else:
-                constant_sum += constant.data.sum()
                 scores_joint_sum += scores_joint.data.sum()
                 scores_marginal_sum += scores_marginal.data.sum()
 
-        empowerment = (constant_sum + scores_joint_sum - scores_marginal_sum) / num_sample
+        empowerment = (scores_joint_sum - scores_marginal_sum) / num_sample
         empowerment_values.append(empowerment.item())
 
     return torch.tensor(empowerment_values)

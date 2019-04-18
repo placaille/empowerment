@@ -134,7 +134,7 @@ class fGANDiscreteStaticAgent(object):
         loss_score_total = loss_score_joint + loss_score_marginal
 
         _, predict_emp = self._model_policy(obs_start_s)
-        target_emp = self.fgan.constant + score_joint_s - score_marg_s
+        target_emp = score_joint_s - score_marg_s
 
         # loss empowerment value
         loss_emp = F.mse_loss(predict_emp, target_emp.detach(), reduction='none').mean()
