@@ -1,4 +1,3 @@
 from .var_info_max import VarInfoDiscreteStaticAgent
 from .mine_repro_distr import MineReproDiscreteStaticAgent
-from .fgan_repro_distr import fGANReproDiscreteStaticAgent
 from .fgan import fGANDiscreteStaticAgent
