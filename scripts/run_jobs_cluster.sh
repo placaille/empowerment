@@ -91,7 +91,7 @@ python -u $job_python_file $python_args" > $job_file
   # sbatch $job_file
   if sbatch $job_file; then
     cp $job_file $job_out_dir
-    rm $config_file
+    # rm $config_file
   fi
   sleep 1
 done
