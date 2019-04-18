@@ -53,13 +53,13 @@ class fGANDiscreteStaticAgent(object):
         self.empowerment_values = torch.zeros(observation_size).to(self.device)
 
         # model used to compute score (or marginals/joint) (s`+a, conditioned on s)
-        self.model_score = models.MLPShallow(2*observation_size + self.num_actions_seqs, hidden_size, 1)
+        self.model_score = models.MLP(2*observation_size + self.num_actions_seqs, hidden_size, 1)
         self.model_score.to(self.device)
 
         self.obj = self.fgan.discr_obj  # returns averything to compute empowerment
 
         # source distribution/generator/policy
-        self.model_policy = models.LinearModel(observation_size, hidden_size, self.num_actions_seqs + 1)
+        self.model_policy = models.MLPShallow(observation_size, hidden_size, self.num_actions_seqs + 1)
         self.model_policy.to(self.device)
 
         # optim
