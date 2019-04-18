@@ -15,7 +15,7 @@ def get_empowerment_values(agent, env, num_sample=1000):
         end_obs_all = []
         onehot_seq_all = []
         for init_obs in init_obs_iterator:
-            out = agent.sample_source_distr(init_obs)
+            out = agent.sample_policy(init_obs)
             for (obs, action_seq) in zip(init_obs, out['actions']):
                 env.reset(state=state)
                 prev_obs = obs

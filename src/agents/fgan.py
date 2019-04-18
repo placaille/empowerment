@@ -203,6 +203,23 @@ class fGANDiscreteStaticAgent(object):
     @torch.no_grad()
     def compute_empowerment_map(self, env, num_sample=1000):
         self.eval_mode()
+        empowerment_states = utils.get_empowerment_values(
+            agent=self,
+            env=env,
+            num_sample=num_sample,
+        )
+        self.empowerment_values = empowerment_states.data
+        self.train_mode()
+        states_i, states_j = zip(*env.free_pos)
+
+        # init map value to avg empowerment to simplify color mapping later
+        empowerment_map = np.full(env.grid.shape, empowerment_states.mean().item(), dtype=np.float32)
+        empowerment_map[states_i, states_j] = empowerment_states.cpu().numpy()
+        return empowerment_map, empowerment_states.mean().item()
+
+    @torch.no_grad()
+    def predict_empowerment_map(self, env):
+        self.eval_mode()
         obs_start = torch.eye(len(env.free_pos)).to(self.device)
         _, pred_emp = self._model_policy(obs_start)
         empowerment_states = pred_emp.squeeze(1)

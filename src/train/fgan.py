@@ -46,6 +46,7 @@ import utils
 @click.option('--max-iter', type=int, default=1000000)
 @click.option('--memory-size', type=int, default=100000)
 @click.option('--batch-size', type=int, default=128)
+@click.option('--samples-for-eval', type=int, default=100)
 @click.option('--samples-for-grad', type=int, default=1, help='Num samples for inner expectations')
 def main(**kwargs):
     pre_trained_dir = os.path.expanduser(kwargs.get('pre_trained_dir'))
@@ -136,6 +137,7 @@ def main(**kwargs):
             avg_loss_policy = cumul_loss['policy_total'] / iter_per_eval
 
             empowerment_map, emp_mean = agent.compute_empowerment_map(env, kwargs.get('samples_for_eval'))
+            pred_empowerment_map, pred_emp_mean = agent.compute_empowerment_map(env)
             entropy_map, entr_mean = agent.compute_entropy_map(env)
 
             env_step_tag = '{}-{}-steps'.format(env_name, num_steps)
@@ -144,6 +146,11 @@ def main(**kwargs):
             tag_ent = 'entropy_{}'.format(env_step_tag)
             agent.save_models(tag=tag_emp+'_', out_dir=os.path.join(log_dir, 'models'))
             utils.log_value_map(writer, empowerment_map,
+                                      mask=env.grid != env.free,
+                                      tag=tag_emp,
+                                      global_step=iter,
+                                      file_name=os.path.join(log_dir, 'maps', tag_emp))
+            utils.log_value_map(writer, pred_empowerment_map,
                                       mask=env.grid != env.free,
                                       tag=tag_pred,
                                       global_step=iter,
